@@ -63,7 +63,6 @@ if action == "Compress":
             try:
                 status_container = st.empty()
                 
-                # Loader
                 loader_text = "Compressing PDF... Please wait. Image-heavy PDFs may take a while."
                 status_container.markdown(f"""
                     <div style="display: flex; align-items: center; gap: 15px;">
@@ -88,28 +87,28 @@ if action == "Compress":
                 if result.returncode == 0 and os.path.exists(output_path):
                     original_size = os.path.getsize(input_path) / (1024 * 1024)
                     compressed_size = os.path.getsize(output_path) / (1024 * 1024)
-                    reduction = ((original_size - compressed_size) / original_size) * 100
-                    
-                    st.success("✅ Compression complete!")
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Original Size", f"{original_size:.2f} MB")
-                    with col2:
-                        st.metric("Compressed Size", f"{compressed_size:.2f} MB")
-                    with col3:
-                        st.metric("Reduction", f"{reduction:.1f}%")
                     
                     if compressed_size > original_size:
                         st.warning("⚠️ Output file is larger than input. Please choose a lower compression level.")
-                    
-                    output_filename = uploaded_file.name.replace(".pdf", "_compressed.pdf")
-                    with open(output_path, "rb") as f:
-                        st.download_button(
-                            label="📥 Download Compressed PDF",
-                            data=f.read(),
-                            file_name=output_filename,
-                            mime="application/pdf"
-                        )
+                    else:
+                        reduction = ((original_size - compressed_size) / original_size) * 100
+                        st.success("✅ Compression complete!")
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Original Size", f"{original_size:.2f} MB")
+                        with col2:
+                            st.metric("Compressed Size", f"{compressed_size:.2f} MB")
+                        with col3:
+                            st.metric("Reduction", f"{reduction:.1f}%")
+                        
+                        output_filename = uploaded_file.name.replace(".pdf", "_compressed.pdf")
+                        with open(output_path, "rb") as f:
+                            st.download_button(
+                                label="📥 Download Compressed PDF",
+                                data=f.read(),
+                                file_name=output_filename,
+                                mime="application/pdf"
+                            )
                 else:
                     st.error(f"❌ Compression failed: {result.stderr}")
             except FileNotFoundError:
