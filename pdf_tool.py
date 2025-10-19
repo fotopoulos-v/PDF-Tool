@@ -477,45 +477,52 @@ elif action == "Convert to PDF":
                 
                 elif file_extension == ".ipynb":
                     
-                    # Inject CSS to help with wide code blocks and outputs
-                    css_content = """
-                    <style>
-                        /* Prevent wide elements from overflowing the page */
-                        .code_cell pre, .output_area pre {
-                            white-space: pre-wrap; /* allow wrapping */
-                            word-break: break-word; /* break long words */
-                            overflow-x: auto; /* still allow horizontal scrolling if wrapping isn't enough */
-                            max-width: 100%;
-                        }
-                        /* Ensure wide outputs (like tables) don't clip */
-                        .output_scroll {
-                            overflow-x: auto;
-                            max-width: 100%;
-                        }
-                    </style>
-                    """
-                    css_path = os.path.join(temp_dir, "fix.css")
-                    with open(css_path, "w") as f:
-                        f.write(css_content)
-
-                    # 1. Use nbconvert to convert ipynb to HTML, injecting the CSS fix
+                    # 1. Use nbconvert to convert ipynb to HTML normally (without unsupported --extra-css)
                     html_output_path = os.path.join(temp_dir, "notebook_output.html")
                     
                     try:
-                        # Use the --extra-css flag to include our fix
+                        # Command without the problematic --extra-css flag
                         cmd = [
                             "jupyter-nbconvert", "--to", "html", 
                             input_path, 
                             "--output", html_output_path,
-                            "--template", "full", # Use the full HTML template
-                            # Use custom CSS for wide-content fixes
-                            "--extra-css", css_path
+                            "--template", "full"
                         ]
                         
                         success, error_message = run_subprocess(cmd, input_path, html_output_path)
                         
                         if success and os.path.exists(html_output_path):
-                            # 2. Use wkhtmltopdf with A3 paper size and Landscape orientation for maximum space
+                            
+                            # 2. MANUALLY INJECT CSS into the HTML file for wide content fixes
+                            css_content = """
+                            <style>
+                                /* Fix for wide tables/code blocks in PDF */
+                                .code_cell pre, .output_area pre {
+                                    white-space: pre-wrap !important; /* Force wrapping long lines */
+                                    word-break: break-word !important; /* Break long words */
+                                    overflow-x: auto !important; /* Allow scroll if necessary */
+                                    max-width: 100% !important; /* Ensure it stays within page width */
+                                }
+                                /* Ensure wide outputs (like tables) don't clip */
+                                .output_scroll {
+                                    overflow-x: auto !important;
+                                    max-width: 100% !important;
+                                }
+                            </style>
+                            """
+                            
+                            # Read the generated HTML
+                            with open(html_output_path, "r", encoding="utf-8") as f:
+                                html_content = f.read()
+
+                            # Inject the CSS before the closing </head> tag
+                            modified_html_content = html_content.replace("</head>", css_content + "</head>")
+                            
+                            # Write modified HTML back to the same file path
+                            with open(html_output_path, "w", encoding="utf-8") as f:
+                                f.write(modified_html_content)
+
+                            # 3. Use wkhtmltopdf with A3 paper size and Landscape orientation for maximum space
                             cmd = [
                                 "wkhtmltopdf", 
                                 "--quiet", 
@@ -551,7 +558,7 @@ elif action == "Convert to PDF":
                             mime="application/pdf"
                         )
                     if file_extension == ".ipynb":
-                         st.info("The notebook was rendered in **A3 Landscape** format to accommodate wide tables and code blocks.")
+                         st.info("The notebook was rendered in **A3 Landscape** format to accommodate wide tables and code blocks. We also forced long lines to wrap.")
                 else:
                     st.error(f"❌ Conversion failed. Check dependencies. Error: {error_message}")
                     st.info("Conversion for certain files relies on external system tools (`pandoc`, `wkhtmltopdf`) that must be listed in a `packages.txt` file for deployment.")
