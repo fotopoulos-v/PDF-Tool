@@ -32,9 +32,12 @@ def run_subprocess(cmd, input_path, output_path):
         if result.returncode == 0 and os.path.exists(output_path):
             return True, None
         else:
+            # Check for specific wkhtmltopdf missing error
+            if "wkhtmltopdf" in cmd[0] and "cannot execute binary file" in result.stderr:
+                return False, "❌ wkhtmltopdf is installed but may require the correct architecture or dependencies (like `libcairo2-dev`)."
             return False, result.stderr
     except FileNotFoundError:
-        return False, f"Required external tool not found. Check if dependencies are installed."
+        return False, f"Required external tool not found: {cmd[0]}. Check if dependencies are installed."
     except subprocess.TimeoutExpired:
         return False, "Process timed out after 5 minutes."
     except Exception as e:
@@ -424,7 +427,7 @@ elif action == "Convert to PDF":
                 
                 # --- Conversion Logic ---
                 if file_extension in [".txt", ".py"]:
-                    # Read content and use pandoc to convert to PDF
+                    # Read content and use pandoc to convert to HTML (to be rendered by wkhtmltopdf)
                     
                     # Convert .py to .txt content first (for syntax highlighting later)
                     if file_extension == ".py":
@@ -436,21 +439,9 @@ elif action == "Convert to PDF":
                     md_input_path = os.path.join(temp_dir, "input.md")
                     with open(md_input_path, "w", encoding="utf-8") as f:
                         # Simple styling wrapper for plain text
+                        f.write("# Converted Document\n\n")
                         f.write(content)
                         
-                    # Use pandoc to convert markdown to PDF
-                    cmd = [
-                        "pandoc", 
-                        md_input_path, 
-                        "-o", output_path,
-                        # Pandoc needs a minimal TeX engine to produce PDFs, 
-                        # which is often complex to guarantee in cloud envs.
-                        # Instead, we will convert MD to HTML and then use wkhtmltopdf
-                        "-t", "html",
-                        "-s"
-                    ]
-                    
-                    # Instead of direct PDF (which needs LaTeX), convert to HTML first
                     html_path = os.path.join(temp_dir, "temp_output.html")
                     cmd = ["pandoc", md_input_path, "-o", html_path, "--standalone"]
                     
@@ -459,15 +450,13 @@ elif action == "Convert to PDF":
                     
                     if success:
                         # Use wkhtmltopdf (via pdfkit) to convert HTML to PDF
-                        cmd = ["wkhtmltopdf", html_path, output_path]
+                        cmd = ["wkhtmltopdf", "--quiet", html_path, output_path]
                         conversion_success, error_message = run_subprocess(cmd, html_path, output_path)
                     
                 
                 elif file_extension in [".doc", ".docx", ".odt"]:
-                    # Use pandoc to convert docx/odt to PDF
-                    cmd = ["pandoc", input_path, "-o", output_path]
                     
-                    # As with .txt, we must convert to HTML first to avoid LaTeX
+                    # Convert docx/odt to HTML first using pandoc
                     html_path = os.path.join(temp_dir, "temp_output.html")
                     cmd = ["pandoc", input_path, "-o", html_path, "--standalone"]
                     
@@ -476,32 +465,65 @@ elif action == "Convert to PDF":
                     
                     if success:
                         # Use wkhtmltopdf (via pdfkit) to convert HTML to PDF
-                        cmd = ["wkhtmltopdf", html_path, output_path]
+                        cmd = ["wkhtmltopdf", "--quiet", html_path, output_path]
                         conversion_success, error_message = run_subprocess(cmd, html_path, output_path)
                     
                 
                 elif file_extension == ".html":
                     # Use wkhtmltopdf (via pdfkit) to convert HTML to PDF directly
-                    cmd = ["wkhtmltopdf", input_path, output_path]
+                    cmd = ["wkhtmltopdf", "--quiet", input_path, output_path]
                     conversion_success, error_message = run_subprocess(cmd, input_path, output_path)
 
                 
                 elif file_extension == ".ipynb":
-                    # 1. Use nbconvert to convert ipynb to HTML
+                    
+                    # Inject CSS to help with wide code blocks and outputs
+                    css_content = """
+                    <style>
+                        /* Prevent wide elements from overflowing the page */
+                        .code_cell pre, .output_area pre {
+                            white-space: pre-wrap; /* allow wrapping */
+                            word-break: break-word; /* break long words */
+                            overflow-x: auto; /* still allow horizontal scrolling if wrapping isn't enough */
+                            max-width: 100%;
+                        }
+                        /* Ensure wide outputs (like tables) don't clip */
+                        .output_scroll {
+                            overflow-x: auto;
+                            max-width: 100%;
+                        }
+                    </style>
+                    """
+                    css_path = os.path.join(temp_dir, "fix.css")
+                    with open(css_path, "w") as f:
+                        f.write(css_content)
+
+                    # 1. Use nbconvert to convert ipynb to HTML, injecting the CSS fix
                     html_output_path = os.path.join(temp_dir, "notebook_output.html")
                     
-                    # We must ensure we have a working nbconvert command structure
-                    # This relies on nbconvert being installed as a Python dependency
                     try:
-                        import nbconvert
-                        # The command line tool is 'jupyter-nbconvert'
-                        cmd = ["jupyter-nbconvert", "--to", "html", input_path, "--output", html_output_path]
+                        # Use the --extra-css flag to include our fix
+                        cmd = [
+                            "jupyter-nbconvert", "--to", "html", 
+                            input_path, 
+                            "--output", html_output_path,
+                            "--template", "full", # Use the full HTML template
+                            # Use custom CSS for wide-content fixes
+                            "--extra-css", css_path
+                        ]
                         
                         success, error_message = run_subprocess(cmd, input_path, html_output_path)
                         
                         if success and os.path.exists(html_output_path):
-                            # 2. Use wkhtmltopdf (via pdfkit) to convert HTML to PDF
-                            cmd = ["wkhtmltopdf", html_output_path, output_path]
+                            # 2. Use wkhtmltopdf with A3 paper size and Landscape orientation for maximum space
+                            cmd = [
+                                "wkhtmltopdf", 
+                                "--quiet", 
+                                "--page-size", "A3", 
+                                "--orientation", "Landscape", 
+                                html_output_path, 
+                                output_path
+                            ]
                             conversion_success, error_message = run_subprocess(cmd, html_output_path, output_path)
                         else:
                             error_message = f"Jupyter Notebook conversion to HTML failed: {error_message}"
@@ -528,9 +550,11 @@ elif action == "Convert to PDF":
                             file_name=output_filename,
                             mime="application/pdf"
                         )
+                    if file_extension == ".ipynb":
+                         st.info("The notebook was rendered in **A3 Landscape** format to accommodate wide tables and code blocks.")
                 else:
                     st.error(f"❌ Conversion failed. Check dependencies. Error: {error_message}")
-                    st.info("Conversion for `.docx`, `.ipynb`, and `.html` relies on external system tools (`pandoc`, `wkhtmltopdf`) that must be listed in a `packages.txt` file for deployment.")
+                    st.info("Conversion for certain files relies on external system tools (`pandoc`, `wkhtmltopdf`) that must be listed in a `packages.txt` file for deployment.")
                     
             except Exception as e:
                 st.error(f"❌ Critical Error during conversion: {e}")
