@@ -25,104 +25,125 @@ action = st.sidebar.radio(
 if action == "Compress":
     st.header("Compress PDF")
     st.write("Reduce your PDF file size using Ghostscript compression.")
-    
+
     uploaded_file = st.file_uploader("Upload PDF", type="pdf", key="compress_file")
-    
-    compression_map = {
-        1: (72, "Maximum (smallest file)"),
-        2: (100, "High"),
-        3: (150, "Medium"),
-        4: (250, "Low"),
-        5: (300, "Minimum (best quality)")
-    }
-    
-    compression_level = st.slider(
-        "Compression Level",
-        min_value=1,
-        max_value=5,
-        value=3,
-        help="1 = Maximum compression (smaller file), 5 = Minimum compression (best quality)"
-    )
-    
-    dpi_value = compression_map[compression_level][0]
-    description = compression_map[compression_level][1]
-    st.caption(f"Selected: {description}")
-    
-    if uploaded_file and st.button("Compress PDF"):
-        file_size_mb = uploaded_file.size / (1024 * 1024)
-        if file_size_mb > 80:
-            st.warning(f"⚠️ Large file ({file_size_mb:.1f} MB) - this may take a while.")
-        
+
+    if uploaded_file:
+        import fitz  # PyMuPDF
+
+        # Save uploaded PDF temporarily
         with tempfile.TemporaryDirectory() as temp_dir:
             input_path = os.path.join(temp_dir, "input.pdf")
             output_path = os.path.join(temp_dir, "compressed.pdf")
-            
             with open(input_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
-            
-            try:
-                import time
-                
-                # Loader
-                status_container = st.empty()
-                
-                # --- Conditional Message Logic ---
+
+            # --- Detect max image DPI in the PDF ---
+            def get_max_pdf_dpi(pdf_path):
+                doc = fitz.open(pdf_path)
+                max_dpi = 0
+                for page in doc:
+                    for img in page.get_images(full=True):
+                        xref = img[0]
+                        base_image = doc.extract_image(xref)
+                        width = base_image["width"]
+                        height = base_image["height"]
+                        page_width = page.rect.width
+                        page_height = page.rect.height
+                        dpi_x = width / (page_width / 72)
+                        dpi_y = height / (page_height / 72)
+                        dpi = max(dpi_x, dpi_y)
+                        if dpi > max_dpi:
+                            max_dpi = dpi
+                return max_dpi if max_dpi > 0 else 300  # fallback DPI
+
+            original_dpi = get_max_pdf_dpi(input_path)
+
+            # Map compression levels
+            compression_map = {
+                1: (72, "Maximum (smallest file)"),
+                2: (100, "High"),
+                3: (150, "Medium"),
+                4: (250, "Low"),
+                5: (300, "Minimum (best quality)")
+            }
+
+            # Filter available levels to avoid upsampling
+            available_levels = {k: v for k, v in compression_map.items() if v[0] <= original_dpi}
+            if not available_levels:
+                available_levels = {1: compression_map[1]}  # fallback
+
+            level_min, level_max = min(available_levels), max(available_levels)
+
+            compression_level = st.slider(
+                "Compression Level",
+                min_value=level_min,
+                max_value=level_max,
+                value=level_max,
+                help="1 = Maximum compression (smaller file), higher = better quality"
+            )
+
+            dpi_value = compression_map[compression_level][0]
+            description = compression_map[compression_level][1]
+            st.caption(f"Selected: {description}")
+
+            # --- Compress PDF using Ghostscript ---
+            if st.button("Compress PDF"):
+                file_size_mb = uploaded_file.size / (1024 * 1024)
                 if file_size_mb > 80:
-                    # Message for files > 80 MB (simpler message)
-                    loader_text = "Compressing PDF... Please wait."
-                else:
-                    # Message for files <= 80 MB
+                    st.warning(f"⚠️ Large file ({file_size_mb:.1f} MB) - this may take a while.")
+
+                try:
+                    status_container = st.empty()
                     loader_text = "Compressing PDF... Please wait. Image-heavy PDFs may take a while."
-                    
-                status_container.markdown(f"""
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <img src="https://cdn.pixabay.com/animation/2023/08/11/21/18/21-18-05-265_256.gif" width="30">
-                        <h3 style="margin: 0;">{loader_text}</h3>
-                    </div>
-                """, unsafe_allow_html=True)
-                # --- End Conditional Message Logic ---
-                
-                pdf_setting = "/ebook" if compression_level >= 4 else "/screen"
-                
-                cmd = [
-                    "gs", "-sDEVICE=pdfwrite", "-dCompatibilityLevel=1.4",
-                    f"-dPDFSETTINGS={pdf_setting}", "-dNOPAUSE", "-dQUIET", "-dBATCH",
-                    "-dDetectDuplicateImages", "-dCompressFonts=true",
-                    f"-r{dpi_value}x{dpi_value}",
-                    f"-sOutputFile={output_path}", input_path
-                ]
-                
-                result = subprocess.run(cmd, capture_output=True, text=True)
-                status_container.empty()
-                
-                if result.returncode == 0 and os.path.exists(output_path):
-                    original_size = os.path.getsize(input_path) / (1024 * 1024)
-                    compressed_size = os.path.getsize(output_path) / (1024 * 1024)
-                    reduction = ((original_size - compressed_size) / original_size) * 100
-                    
-                    st.success("✅ Compression complete!")
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Original Size", f"{original_size:.2f} MB")
-                    with col2:
-                        st.metric("Compressed Size", f"{compressed_size:.2f} MB")
-                    with col3:
-                        st.metric("Reduction", f"{reduction:.1f}%")
-                    
-                    output_filename = uploaded_file.name.replace(".pdf", "_compressed.pdf")
-                    with open(output_path, "rb") as f:
-                        st.download_button(
-                            label="📥 Download Compressed PDF",
-                            data=f.read(),
-                            file_name=output_filename,
-                            mime="application/pdf"
-                        )
-                else:
-                    st.error(f"❌ Compression failed: {result.stderr}")
-            except FileNotFoundError:
-                st.error("❌ Ghostscript not found. Install with: sudo apt install ghostscript")
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
+                    status_container.markdown(f"""
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <img src="https://cdn.pixabay.com/animation/2023/08/11/21/18/21-18-05-265_256.gif" width="30">
+                            <h3 style="margin: 0;">{loader_text}</h3>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+                    pdf_setting = "/ebook" if compression_level >= 4 else "/screen"
+                    cmd = [
+                        "gs", "-sDEVICE=pdfwrite", "-dCompatibilityLevel=1.4",
+                        f"-dPDFSETTINGS={pdf_setting}", "-dNOPAUSE", "-dQUIET", "-dBATCH",
+                        "-dDetectDuplicateImages", "-dCompressFonts=true",
+                        f"-r{dpi_value}x{dpi_value}",
+                        f"-sOutputFile={output_path}", input_path
+                    ]
+
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    status_container.empty()
+
+                    if result.returncode == 0 and os.path.exists(output_path):
+                        original_size = os.path.getsize(input_path) / (1024 * 1024)
+                        compressed_size = os.path.getsize(output_path) / (1024 * 1024)
+                        reduction = ((original_size - compressed_size) / original_size) * 100
+
+                        st.success("✅ Compression complete!")
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Original Size", f"{original_size:.2f} MB")
+                        with col2:
+                            st.metric("Compressed Size", f"{compressed_size:.2f} MB")
+                        with col3:
+                            st.metric("Reduction", f"{reduction:.1f}%")
+
+                        output_filename = uploaded_file.name.replace(".pdf", "_compressed.pdf")
+                        with open(output_path, "rb") as f:
+                            st.download_button(
+                                label="📥 Download Compressed PDF",
+                                data=f.read(),
+                                file_name=output_filename,
+                                mime="application/pdf"
+                            )
+                    else:
+                        st.error(f"❌ Compression failed: {result.stderr}")
+                except FileNotFoundError:
+                    st.error("❌ Ghostscript not found. Install with: sudo apt install ghostscript")
+                except Exception as e:
+                    st.error(f"❌ Error: {e}")
+
 
 
 # Extract Text
