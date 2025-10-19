@@ -480,25 +480,23 @@ elif action == "Convert to PDF":
                     latex_output_path = os.path.join(temp_dir, latex_output_name)
                     
                     try:
-                        # Command for LaTeX generation (using the standard article template)
+                        # Command for LaTeX generation (using the more reliable 'base' template)
                         cmd_nbconvert = [
                             "jupyter-nbconvert", "--to", "latex", 
                             input_path, 
-                            "--output", latex_output_name, # nbconvert expects only the filename here
-                            "--template", "article",
-                            "--output-dir", temp_dir # tells nbconvert where to put the output
+                            "--output", latex_output_name, 
+                            "--template", "base", # FIX: Changed from 'article' to 'base'
+                            "--output-dir", temp_dir 
                         ]
                         
                         st.info("Attempting conversion using the high-quality **LaTeX pipeline** (nbconvert -> LaTeX -> PDF)...")
                         
-                        # Run nbconvert to IPYNB -> LaTeX. It returns 0 if successful.
+                        # Run nbconvert to IPYNB -> LaTeX.
                         result_nbconvert = subprocess.run(cmd_nbconvert, capture_output=True, text=True, timeout=120)
                         
                         if result_nbconvert.returncode == 0 and os.path.exists(latex_output_path):
                             
-                            # 2. Compile the LaTeX file to PDF using xelatex (preferred for modern/notebook content)
-                            # Compilation must happen in temp_dir because auxiliary files are created there.
-                            
+                            # 2. Compile the LaTeX file to PDF using xelatex
                             xelatex_cmd = ["xelatex", "--interaction=batchmode", latex_output_name]
                             
                             st.info("Compiling LaTeX to PDF (running xelatex twice)...")
@@ -508,11 +506,11 @@ elif action == "Convert to PDF":
                             # Second run (to resolve references/TOC)
                             result_xelatex = subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120) 
                             
-                            final_pdf_name = Path(latex_output_name).stem + ".pdf" # notebook_output.pdf
+                            final_pdf_name = Path(latex_output_name).stem + ".pdf" 
                             final_pdf_path_temp = os.path.join(temp_dir, final_pdf_name)
                             
                             if os.path.exists(final_pdf_path_temp):
-                                # Rename output file to 'output.pdf' for consistency with the rest of the app logic
+                                # Rename output file to 'output.pdf' 
                                 os.rename(final_pdf_path_temp, output_path)
                                 conversion_success = True
                             else:
