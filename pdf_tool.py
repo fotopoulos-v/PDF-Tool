@@ -27,24 +27,29 @@ action = st.sidebar.radio(
 # Function to run subprocess command and handle errors
 def run_subprocess(cmd, input_path, output_path):
     """Encapsulates subprocess call and error checking."""
+    # Timeout set to 5 minutes to prevent long-running processes on large files
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300) # 5 min timeout
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300) 
+        
+        # Check if output file was created (essential for Ghostscript and pandoc)
         if result.returncode == 0 and os.path.exists(output_path):
             return True, None
         else:
-            # Check for specific wkhtmltopdf missing error
+            # Check for common dependency errors
             if "wkhtmltopdf" in cmd[0] and "cannot execute binary file" in result.stderr:
                 return False, "❌ wkhtmltopdf is installed but may require the correct architecture or dependencies (like `libcairo2-dev`)."
+            if "pandoc" in cmd[0] and result.returncode != 0:
+                 return False, f"Pandoc failed with error: {result.stderr or result.stdout}"
             return False, result.stderr
     except FileNotFoundError:
-        return False, f"Required external tool not found: {cmd[0]}. Check if dependencies are installed."
+        return False, f"Required external tool not found: {cmd[0]}. Check if dependencies are installed in `packages.txt`."
     except subprocess.TimeoutExpired:
         return False, "Process timed out after 5 minutes."
     except Exception as e:
         return False, str(e)
 
 
-# Compress
+# --- Compress Section ---
 if action == "Compress":
     st.header("Compress PDF")
     st.write("Reduce your PDF file size using Ghostscript compression.")
@@ -64,8 +69,7 @@ if action == "Compress":
         min_value=1,
         max_value=5,
         value=3,
-        help="1 = Maximum compression (smaller file), 5 = Minimum compression (best quality)"
-    )
+        help="1 = Maximum compression (smaller file), 5 = Minimum compression (best quality)")
     
     dpi_value = compression_map[compression_level][0]
     description = compression_map[compression_level][1]
@@ -90,10 +94,8 @@ if action == "Compress":
                 
                 # --- Conditional Message Logic ---
                 if file_size_mb > 80:
-                    # Message for files > 80 MB (simpler message)
                     loader_text = "Compressing PDF... Please wait."
                 else:
-                    # Message for files <= 80 MB
                     loader_text = "Compressing PDF... Please wait. Image-heavy PDFs may take a while."
                     
                 status_container.markdown(f"""
@@ -147,7 +149,8 @@ if action == "Compress":
             except Exception as e:
                 st.error(f"❌ Error: {e}")
 
-# Extract Text
+
+# --- Extract Text Section ---
 elif action == "Extract Text":
     st.header("Extract Text from PDF")
     uploaded_file = st.file_uploader("Upload PDF", type="pdf", key="extract_text_file")
@@ -177,6 +180,7 @@ elif action == "Extract Text":
                 status_container.empty()
                 st.success("✅ Text extracted successfully!")
                 
+                # Use reportlab to create a PDF of the extracted text for cleaner download
                 from reportlab.pdfgen import canvas
                 from reportlab.lib.pagesizes import letter
                 
@@ -212,7 +216,7 @@ elif action == "Extract Text":
                 st.error(f"❌ Error: {e}")
 
 
-# Extract Pages
+# --- Extract Pages Section ---
 elif action == "Extract Pages":
     st.header("Extract Pages from PDF")
     uploaded_file = st.file_uploader("Upload PDF", type="pdf", key="extract_pages_file")
@@ -262,7 +266,7 @@ elif action == "Extract Pages":
             except Exception as e:
                 st.error(f"❌ Error: {e}")
 
-# Merge PDFs
+# --- Merge PDFs Section ---
 elif action == "Merge":
     st.header("Merge PDFs")
     uploaded_files = st.file_uploader("Upload PDFs", type="pdf", accept_multiple_files=True, key="merge_files")
@@ -302,7 +306,7 @@ elif action == "Merge":
     elif uploaded_files and len(uploaded_files) == 1:
         st.warning("⚠️ Please upload at least 2 PDFs.")
 
-# Split PDF
+# --- Split PDF Section ---
 elif action == "Split":
     st.header("Split PDF")
     uploaded_file = st.file_uploader("Upload PDF", type="pdf", key="split_file")
@@ -346,7 +350,7 @@ elif action == "Split":
                 st.error(f"❌ Error: {e}")
 
 
-# Rotate
+# --- Rotate Section ---
 elif action == "Rotate":
     st.header("Rotate PDF Pages")
     uploaded_file = st.file_uploader("Upload PDF", type="pdf", key="rotate_file")
@@ -390,7 +394,7 @@ elif action == "Rotate":
             except Exception as e:
                 st.error(f"❌ Error: {e}")
 
-# Convert to PDF
+# --- Convert to PDF Section ---
 elif action == "Convert to PDF":
     st.header("Convert Files to PDF")
     st.write("Convert text and document files (txt, docx, html, py, ipynb) into a PDF document.")
@@ -426,116 +430,101 @@ elif action == "Convert to PDF":
                 error_message = ""
                 
                 # --- Conversion Logic ---
-                if file_extension in [".txt", ".py"]:
-                    # Read content and use pandoc to convert to HTML (to be rendered by wkhtmltopdf)
-                    
-                    # Convert .py to .txt content first (for syntax highlighting later)
-                    if file_extension == ".py":
-                         content = f"```python\n{uploaded_file.getvalue().decode('utf-8')}\n```"
-                    else: # .txt
-                         content = uploaded_file.getvalue().decode('utf-8')
-
-                    # Write content to a temporary markdown file to preserve formatting via pandoc
-                    md_input_path = os.path.join(temp_dir, "input.md")
-                    with open(md_input_path, "w", encoding="utf-8") as f:
-                        # Simple styling wrapper for plain text
-                        f.write("# Converted Document\n\n")
-                        f.write(content)
-                        
-                    html_path = os.path.join(temp_dir, "temp_output.html")
-                    cmd = ["pandoc", md_input_path, "-o", html_path, "--standalone"]
-                    
-                    # Run pandoc to MD -> HTML
-                    success, error_message = run_subprocess(cmd, md_input_path, html_path)
-                    
-                    if success:
-                        # Use wkhtmltopdf (via pdfkit) to convert HTML to PDF
-                        cmd = ["wkhtmltopdf", "--quiet", html_path, output_path]
-                        conversion_success, error_message = run_subprocess(cmd, html_path, output_path)
-                    
                 
-                elif file_extension in [".doc", ".docx", ".odt"]:
+                # Files converted via Pandoc -> HTML -> wkhtmltopdf
+                if file_extension in [".txt", ".py", ".doc", ".docx", ".odt"]:
                     
-                    # Convert docx/odt to HTML first using pandoc
+                    # 1. Convert source file to intermediate HTML using pandoc
                     html_path = os.path.join(temp_dir, "temp_output.html")
-                    cmd = ["pandoc", input_path, "-o", html_path, "--standalone"]
                     
-                    # Run pandoc to DOCX -> HTML
-                    success, error_message = run_subprocess(cmd, input_path, html_path)
+                    # For TXT/PY, we wrap content in a Markdown block for pandoc to process nicely
+                    if file_extension in [".txt", ".py"]:
+                        content = uploaded_file.getvalue().decode('utf-8')
+                        md_input_path = os.path.join(temp_dir, "input.md")
+                        
+                        # Use fenced code block for syntax highlighting of python files
+                        if file_extension == ".py":
+                            md_content = f"# Converted Document\n\n```python\n{content}\n```"
+                        else: # .txt
+                            md_content = f"# Converted Document\n\n{content}"
+                        
+                        with open(md_input_path, "w", encoding="utf-8") as f:
+                            f.write(md_content)
+                            
+                        pandoc_input = md_input_path
+                        
+                    else: # .doc, .docx, .odt
+                        pandoc_input = input_path
+                    
+                    # Pandoc command: input -> HTML
+                    cmd_pandoc = ["pandoc", pandoc_input, "-o", html_path, "--standalone"]
+                    
+                    success, error_message = run_subprocess(cmd_pandoc, pandoc_input, html_path)
                     
                     if success:
-                        # Use wkhtmltopdf (via pdfkit) to convert HTML to PDF
-                        cmd = ["wkhtmltopdf", "--quiet", html_path, output_path]
-                        conversion_success, error_message = run_subprocess(cmd, html_path, output_path)
-                    
+                        # 2. Convert HTML to PDF using wkhtmltopdf
+                        cmd_wkhtml = ["wkhtmltopdf", "--quiet", html_path, output_path]
+                        conversion_success, error_message = run_subprocess(cmd_wkhtml, html_path, output_path)
+                
                 
                 elif file_extension == ".html":
-                    # Use wkhtmltopdf (via pdfkit) to convert HTML to PDF directly
+                    # HTML to PDF directly using wkhtmltopdf
                     cmd = ["wkhtmltopdf", "--quiet", input_path, output_path]
                     conversion_success, error_message = run_subprocess(cmd, input_path, output_path)
 
                 
                 elif file_extension == ".ipynb":
                     
-                    # 1. Use nbconvert to convert ipynb to HTML normally
-                    html_output_path = os.path.join(temp_dir, "notebook_output.html")
+                    # 1. Use nbconvert to convert ipynb to LaTeX
+                    latex_output_name = "notebook_output.tex"
+                    latex_output_path = os.path.join(temp_dir, latex_output_name)
                     
                     try:
-                        # Command for HTML generation
-                        cmd = [
-                            "jupyter-nbconvert", "--to", "html", 
+                        # Command for LaTeX generation (using the standard article template)
+                        cmd_nbconvert = [
+                            "jupyter-nbconvert", "--to", "latex", 
                             input_path, 
-                            "--output", html_output_path,
-                            "--template", "full"
+                            "--output", latex_output_name, # nbconvert expects only the filename here
+                            "--template", "article",
+                            "--output-dir", temp_dir # tells nbconvert where to put the output
                         ]
                         
-                        success, error_message = run_subprocess(cmd, input_path, html_output_path)
+                        st.info("Attempting conversion using the high-quality **LaTeX pipeline** (nbconvert -> LaTeX -> PDF)...")
                         
-                        if success and os.path.exists(html_output_path):
+                        # Run nbconvert to IPYNB -> LaTeX. It returns 0 if successful.
+                        result_nbconvert = subprocess.run(cmd_nbconvert, capture_output=True, text=True, timeout=120)
+                        
+                        if result_nbconvert.returncode == 0 and os.path.exists(latex_output_path):
                             
-                            # 2. MANUALLY INJECT CSS into the HTML file for wide content fixes
-                            css_content = """
-                            <style>
-                                /* Fix for wide tables/code blocks in A4 Portrait mode */
-                                .code_cell pre, .output_area pre {
-                                    white-space: pre-wrap !important; /* Force wrapping long lines */
-                                    word-break: break-word !important; /* Break long words */
-                                    overflow-x: auto !important; /* Allow scroll if necessary */
-                                    max-width: 100% !important; /* Ensure it stays within page width */
-                                }
-                                /* Ensure wide outputs (like tables) don't clip */
-                                .output_scroll {
-                                    overflow-x: auto !important;
-                                    max-width: 100% !important;
-                                }
-                                /* Fix for wide pandas dataframes, often represented as tables */
-                                table {
-                                    word-break: break-word !important;
-                                }
-                            </style>
-                            """
+                            # 2. Compile the LaTeX file to PDF using xelatex (preferred for modern/notebook content)
+                            # Compilation must happen in temp_dir because auxiliary files are created there.
                             
-                            # Read the generated HTML
-                            with open(html_output_path, "r", encoding="utf-8") as f:
-                                html_content = f.read()
-
-                            # Inject the CSS before the closing </head> tag
-                            modified_html_content = html_content.replace("</head>", css_content + "</head>")
+                            xelatex_cmd = ["xelatex", "--interaction=batchmode", latex_output_name]
                             
-                            # Write modified HTML back to the same file path
-                            with open(html_output_path, "w", encoding="utf-8") as f:
-                                f.write(modified_html_content)
-
-                            # 3. Use wkhtmltopdf with default A4 Portrait settings (no extra flags)
-                            cmd = [
-                                "wkhtmltopdf", 
-                                "--quiet", 
-                                html_output_path, 
-                                output_path
-                            ]
-                            conversion_success, error_message = run_subprocess(cmd, html_output_path, output_path)
+                            st.info("Compiling LaTeX to PDF (running xelatex twice)...")
+                            
+                            # First run (for auxiliary files, TOC, etc.)
+                            subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120) 
+                            # Second run (to resolve references/TOC)
+                            result_xelatex = subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120) 
+                            
+                            final_pdf_name = Path(latex_output_name).stem + ".pdf" # notebook_output.pdf
+                            final_pdf_path_temp = os.path.join(temp_dir, final_pdf_name)
+                            
+                            if os.path.exists(final_pdf_path_temp):
+                                # Rename output file to 'output.pdf' for consistency with the rest of the app logic
+                                os.rename(final_pdf_path_temp, output_path)
+                                conversion_success = True
+                            else:
+                                conversion_success = False
+                                # Provides detailed error about LaTeX compilation failure
+                                error_message = (
+                                    f"LaTeX compilation failed. Ensure the notebook content is valid for TeX and that all "
+                                    f"LaTeX dependencies are installed (xelatex, texlive packages). "
+                                    f"Error Details: {result_xelatex.stderr or result_xelatex.stdout}"
+                                )
                         else:
-                            error_message = f"Jupyter Notebook conversion to HTML failed: {error_message}"
+                            error_message = f"Jupyter Notebook conversion to LaTeX failed: {result_nbconvert.stderr}"
                             
                     except ImportError:
                          error_message = "Python package 'nbconvert' not found. Please install it."
@@ -560,10 +549,10 @@ elif action == "Convert to PDF":
                             mime="application/pdf"
                         )
                     if file_extension == ".ipynb":
-                         st.info("The notebook was rendered in **A4 Portrait** mode. We injected custom styles to force long code/table lines to wrap.")
+                         st.info("The notebook was rendered using the **LaTeX pipeline**. This provides much better control over typography, mathematics, and complex outputs like wide tables, ensuring a clean A4 output without clipped or overly wrapped content.")
                 else:
-                    st.error(f"❌ Conversion failed. Check dependencies. Error: {error_message}")
-                    st.info("Conversion for certain files relies on external system tools (`pandoc`, `wkhtmltopdf`) that must be listed in a `packages.txt` file for deployment.")
+                    st.error(f"❌ Conversion failed. Error: {error_message}")
+                    st.info("Conversion relies on external system tools (`pandoc`, `wkhtmltopdf`, `xelatex`) that must be listed in a `packages.txt` file for deployment. Please verify your dependencies.")
                     
             except Exception as e:
                 st.error(f"❌ Critical Error during conversion: {e}")
