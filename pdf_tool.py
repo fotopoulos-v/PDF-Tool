@@ -480,12 +480,12 @@ elif action == "Convert to PDF":
                     latex_output_path = os.path.join(temp_dir, latex_output_name)
                     
                     try:
-                        # Command for LaTeX generation (using the more reliable 'base' template)
+                        # Command for LaTeX generation (using the system default template)
                         cmd_nbconvert = [
                             "jupyter-nbconvert", "--to", "latex", 
                             input_path, 
                             "--output", latex_output_name, 
-                            "--template", "base", # FIX: Changed from 'article' to 'base'
+                            # FIX: Removed the "--template" argument to rely on internal default
                             "--output-dir", temp_dir 
                         ]
                         
