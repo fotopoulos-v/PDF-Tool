@@ -2,3 +2,6 @@ streamlit
 PyPDF2
 PyMuPDF
 reportlab
+python-docx
+nbconvert
+pdfkit

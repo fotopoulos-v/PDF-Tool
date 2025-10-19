@@ -5,6 +5,9 @@ import tempfile
 from pathlib import Path
 from PyPDF2 import PdfReader, PdfWriter
 import fitz  # PyMuPDF
+# Import for new feature
+import json
+import io
 
 st.set_page_config(page_title="PDF Tool", layout="wide")
 st.markdown("""
@@ -17,9 +20,26 @@ st.markdown("""
 # Sidebar for action selection
 action = st.sidebar.radio(
     "Select Action",
-    ["Compress", "Extract Text", "Extract Pages", "Merge", "Split", "Rotate"],
+    ["Compress", "Extract Text", "Extract Pages", "Merge", "Split", "Rotate", "Convert to PDF"],
     index=0
 )
+
+# Function to run subprocess command and handle errors
+def run_subprocess(cmd, input_path, output_path):
+    """Encapsulates subprocess call and error checking."""
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300) # 5 min timeout
+        if result.returncode == 0 and os.path.exists(output_path):
+            return True, None
+        else:
+            return False, result.stderr
+    except FileNotFoundError:
+        return False, f"Required external tool not found. Check if dependencies are installed."
+    except subprocess.TimeoutExpired:
+        return False, "Process timed out after 5 minutes."
+    except Exception as e:
+        return False, str(e)
+
 
 # Compress
 if action == "Compress":
@@ -61,15 +81,25 @@ if action == "Compress":
                 f.write(uploaded_file.getbuffer())
             
             try:
+                
+                # Loader
                 status_container = st.empty()
                 
-                loader_text = "Compressing PDF... Please wait. Image-heavy PDFs may take a while."
+                # --- Conditional Message Logic ---
+                if file_size_mb > 80:
+                    # Message for files > 80 MB (simpler message)
+                    loader_text = "Compressing PDF... Please wait."
+                else:
+                    # Message for files <= 80 MB
+                    loader_text = "Compressing PDF... Please wait. Image-heavy PDFs may take a while."
+                    
                 status_container.markdown(f"""
                     <div style="display: flex; align-items: center; gap: 15px;">
                         <img src="https://cdn.pixabay.com/animation/2023/08/11/21/18/21-18-05-265_256.gif" width="30">
                         <h3 style="margin: 0;">{loader_text}</h3>
                     </div>
                 """, unsafe_allow_html=True)
+                # --- End Conditional Message Logic ---
                 
                 pdf_setting = "/ebook" if compression_level >= 4 else "/screen"
                 
@@ -81,10 +111,10 @@ if action == "Compress":
                     f"-sOutputFile={output_path}", input_path
                 ]
                 
-                result = subprocess.run(cmd, capture_output=True, text=True)
+                success, error = run_subprocess(cmd, input_path, output_path)
                 status_container.empty()
                 
-                if result.returncode == 0 and os.path.exists(output_path):
+                if success:
                     original_size = os.path.getsize(input_path) / (1024 * 1024)
                     compressed_size = os.path.getsize(output_path) / (1024 * 1024)
                     
@@ -110,13 +140,9 @@ if action == "Compress":
                                 mime="application/pdf"
                             )
                 else:
-                    st.error(f"❌ Compression failed: {result.stderr}")
-            except FileNotFoundError:
-                st.error("❌ Ghostscript not found. Install with: sudo apt install ghostscript")
+                    st.error(f"❌ Compression failed: {error}")
             except Exception as e:
                 st.error(f"❌ Error: {e}")
-
-
 
 # Extract Text
 elif action == "Extract Text":
@@ -361,3 +387,151 @@ elif action == "Rotate":
             except Exception as e:
                 st.error(f"❌ Error: {e}")
 
+# Convert to PDF
+elif action == "Convert to PDF":
+    st.header("Convert Files to PDF")
+    st.write("Convert text and document files (txt, docx, html, py, ipynb) into a PDF document.")
+    
+    uploaded_file = st.file_uploader(
+        "Upload File", 
+        type=["txt", "doc", "docx", "odt", "ipynb", "py", "html"], 
+        key="convert_file"
+    )
+
+    if uploaded_file and st.button("Convert to PDF"):
+        file_extension = Path(uploaded_file.name).suffix.lower()
+        original_name = Path(uploaded_file.name).stem
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = os.path.join(temp_dir, f"input{file_extension}")
+            output_path = os.path.join(temp_dir, "output.pdf")
+            
+            # Save the uploaded file to a temporary location
+            with open(input_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+
+            try:
+                status_container = st.empty()
+                status_container.markdown("""
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <img src="https://cdn.pixabay.com/animation/2023/08/11/21/18/21-18-05-265_256.gif" width="30">
+                        <h3 style="margin: 0;">Converting file... Please wait</h3>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                conversion_success = False
+                error_message = ""
+                
+                # --- Conversion Logic ---
+                if file_extension in [".txt", ".py"]:
+                    # Read content and use pandoc to convert to PDF
+                    
+                    # Convert .py to .txt content first (for syntax highlighting later)
+                    if file_extension == ".py":
+                         content = f"```python\n{uploaded_file.getvalue().decode('utf-8')}\n```"
+                    else: # .txt
+                         content = uploaded_file.getvalue().decode('utf-8')
+
+                    # Write content to a temporary markdown file to preserve formatting via pandoc
+                    md_input_path = os.path.join(temp_dir, "input.md")
+                    with open(md_input_path, "w", encoding="utf-8") as f:
+                        # Simple styling wrapper for plain text
+                        f.write("# Converted Document\n\n")
+                        f.write(content)
+                        
+                    # Use pandoc to convert markdown to PDF
+                    cmd = [
+                        "pandoc", 
+                        md_input_path, 
+                        "-o", output_path,
+                        # Pandoc needs a minimal TeX engine to produce PDFs, 
+                        # which is often complex to guarantee in cloud envs.
+                        # Instead, we will convert MD to HTML and then use wkhtmltopdf
+                        "-t", "html",
+                        "-s"
+                    ]
+                    
+                    # Instead of direct PDF (which needs LaTeX), convert to HTML first
+                    html_path = os.path.join(temp_dir, "temp_output.html")
+                    cmd = ["pandoc", md_input_path, "-o", html_path, "--standalone"]
+                    
+                    # Run pandoc to MD -> HTML
+                    success, error_message = run_subprocess(cmd, md_input_path, html_path)
+                    
+                    if success:
+                        # Use wkhtmltopdf (via pdfkit) to convert HTML to PDF
+                        cmd = ["wkhtmltopdf", html_path, output_path]
+                        conversion_success, error_message = run_subprocess(cmd, html_path, output_path)
+                    
+                
+                elif file_extension in [".doc", ".docx", ".odt"]:
+                    # Use pandoc to convert docx/odt to PDF
+                    cmd = ["pandoc", input_path, "-o", output_path]
+                    
+                    # As with .txt, we must convert to HTML first to avoid LaTeX
+                    html_path = os.path.join(temp_dir, "temp_output.html")
+                    cmd = ["pandoc", input_path, "-o", html_path, "--standalone"]
+                    
+                    # Run pandoc to DOCX -> HTML
+                    success, error_message = run_subprocess(cmd, input_path, html_path)
+                    
+                    if success:
+                        # Use wkhtmltopdf (via pdfkit) to convert HTML to PDF
+                        cmd = ["wkhtmltopdf", html_path, output_path]
+                        conversion_success, error_message = run_subprocess(cmd, html_path, output_path)
+                    
+                
+                elif file_extension == ".html":
+                    # Use wkhtmltopdf (via pdfkit) to convert HTML to PDF directly
+                    cmd = ["wkhtmltopdf", input_path, output_path]
+                    conversion_success, error_message = run_subprocess(cmd, input_path, output_path)
+
+                
+                elif file_extension == ".ipynb":
+                    # 1. Use nbconvert to convert ipynb to HTML
+                    html_output_path = os.path.join(temp_dir, "notebook_output.html")
+                    
+                    # We must ensure we have a working nbconvert command structure
+                    # This relies on nbconvert being installed as a Python dependency
+                    try:
+                        import nbconvert
+                        # The command line tool is 'jupyter-nbconvert'
+                        cmd = ["jupyter-nbconvert", "--to", "html", input_path, "--output", html_output_path]
+                        
+                        success, error_message = run_subprocess(cmd, input_path, html_output_path)
+                        
+                        if success and os.path.exists(html_output_path):
+                            # 2. Use wkhtmltopdf (via pdfkit) to convert HTML to PDF
+                            cmd = ["wkhtmltopdf", html_output_path, output_path]
+                            conversion_success, error_message = run_subprocess(cmd, html_output_path, output_path)
+                        else:
+                            error_message = f"Jupyter Notebook conversion to HTML failed: {error_message}"
+                            
+                    except ImportError:
+                         error_message = "Python package 'nbconvert' not found. Please install it."
+                    except Exception as e:
+                        error_message = f"Notebook conversion error: {e}"
+
+
+                # --- Final Result Display ---
+                status_container.empty()
+                if conversion_success:
+                    st.success("✅ File converted to PDF successfully!")
+                    
+                    converted_size = os.path.getsize(output_path) / (1024 * 1024)
+                    st.metric("Output Size", f"{converted_size:.2f} MB")
+                    
+                    output_filename = f"{original_name}.pdf"
+                    with open(output_path, "rb") as f:
+                        st.download_button(
+                            label="📥 Download Converted PDF",
+                            data=f.read(),
+                            file_name=output_filename,
+                            mime="application/pdf"
+                        )
+                else:
+                    st.error(f"❌ Conversion failed. Check dependencies. Error: {error_message}")
+                    st.info("Conversion for `.docx`, `.ipynb`, and `.html` relies on external system tools (`pandoc`, `wkhtmltopdf`) that must be listed in a `packages.txt` file for deployment.")
+                    
+            except Exception as e:
+                st.error(f"❌ Critical Error during conversion: {e}")
