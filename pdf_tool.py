@@ -477,11 +477,11 @@ elif action == "Convert to PDF":
                 
                 elif file_extension == ".ipynb":
                     
-                    # 1. Use nbconvert to convert ipynb to HTML normally (without unsupported --extra-css)
+                    # 1. Use nbconvert to convert ipynb to HTML normally
                     html_output_path = os.path.join(temp_dir, "notebook_output.html")
                     
                     try:
-                        # Command without the problematic --extra-css flag
+                        # Command for HTML generation
                         cmd = [
                             "jupyter-nbconvert", "--to", "html", 
                             input_path, 
@@ -496,7 +496,7 @@ elif action == "Convert to PDF":
                             # 2. MANUALLY INJECT CSS into the HTML file for wide content fixes
                             css_content = """
                             <style>
-                                /* Fix for wide tables/code blocks in PDF */
+                                /* Fix for wide tables/code blocks in A4 Portrait mode */
                                 .code_cell pre, .output_area pre {
                                     white-space: pre-wrap !important; /* Force wrapping long lines */
                                     word-break: break-word !important; /* Break long words */
@@ -507,6 +507,10 @@ elif action == "Convert to PDF":
                                 .output_scroll {
                                     overflow-x: auto !important;
                                     max-width: 100% !important;
+                                }
+                                /* Fix for wide pandas dataframes, often represented as tables */
+                                table {
+                                    word-break: break-word !important;
                                 }
                             </style>
                             """
@@ -522,12 +526,10 @@ elif action == "Convert to PDF":
                             with open(html_output_path, "w", encoding="utf-8") as f:
                                 f.write(modified_html_content)
 
-                            # 3. Use wkhtmltopdf with A3 paper size and Landscape orientation for maximum space
+                            # 3. Use wkhtmltopdf with default A4 Portrait settings (no extra flags)
                             cmd = [
                                 "wkhtmltopdf", 
                                 "--quiet", 
-                                "--page-size", "A3", 
-                                "--orientation", "Landscape", 
                                 html_output_path, 
                                 output_path
                             ]
@@ -558,7 +560,7 @@ elif action == "Convert to PDF":
                             mime="application/pdf"
                         )
                     if file_extension == ".ipynb":
-                         st.info("The notebook was rendered in **A3 Landscape** format to accommodate wide tables and code blocks. We also forced long lines to wrap.")
+                         st.info("The notebook was rendered in **A4 Portrait** mode. We injected custom styles to force long code/table lines to wrap.")
                 else:
                     st.error(f"❌ Conversion failed. Check dependencies. Error: {error_message}")
                     st.info("Conversion for certain files relies on external system tools (`pandoc`, `wkhtmltopdf`) that must be listed in a `packages.txt` file for deployment.")
