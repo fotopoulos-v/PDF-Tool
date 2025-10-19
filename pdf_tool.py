@@ -436,7 +436,6 @@ elif action == "Convert to PDF":
                     md_input_path = os.path.join(temp_dir, "input.md")
                     with open(md_input_path, "w", encoding="utf-8") as f:
                         # Simple styling wrapper for plain text
-                        f.write("# Converted Document\n\n")
                         f.write(content)
                         
                     # Use pandoc to convert markdown to PDF
