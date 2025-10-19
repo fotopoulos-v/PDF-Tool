@@ -65,12 +65,22 @@ if action == "Compress":
                 
                 # Loader
                 status_container = st.empty()
-                status_container.markdown("""
+                
+                # --- Conditional Message Logic ---
+                if file_size_mb > 80:
+                    # Message for files > 80 MB (simpler message)
+                    loader_text = "Compressing PDF... Please wait."
+                else:
+                    # Message for files <= 80 MB
+                    loader_text = "Compressing PDF... Please wait. Image-heavy PDFs may take a while."
+                    
+                status_container.markdown(f"""
                     <div style="display: flex; align-items: center; gap: 15px;">
                         <img src="https://cdn.pixabay.com/animation/2023/08/11/21/18/21-18-05-265_256.gif" width="30">
-                        <h3 style="margin: 0;">Compressing PDF... Please wait. Image-heavy PDFs may take a while.</h3>
+                        <h3 style="margin: 0;">{loader_text}</h3>
                     </div>
                 """, unsafe_allow_html=True)
+                # --- End Conditional Message Logic ---
                 
                 pdf_setting = "/ebook" if compression_level >= 4 else "/screen"
                 
@@ -113,6 +123,7 @@ if action == "Compress":
                 st.error("❌ Ghostscript not found. Install with: sudo apt install ghostscript")
             except Exception as e:
                 st.error(f"❌ Error: {e}")
+
 
 # Extract Text
 elif action == "Extract Text":
