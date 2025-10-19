@@ -68,7 +68,7 @@ if action == "Compress":
                 status_container.markdown("""
                     <div style="display: flex; align-items: center; gap: 15px;">
                         <img src="https://cdn.pixabay.com/animation/2023/08/11/21/18/21-18-05-265_256.gif" width="30">
-                        <h3 style="margin: 0;">Compressing PDF... Please wait</h3>
+                        <h3 style="margin: 0;">Compressing PDF... Please wait. Image-heavy PDFs may take a while.</h3>
                     </div>
                 """, unsafe_allow_html=True)
                 
