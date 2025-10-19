@@ -18,7 +18,7 @@ Easily **compress**, **merge**, **split**, **rotate**, and **extract text or pag
 
 ## 🌐 Use Online
 
-👉 **[Launch the PDF Tool App](https://pdf-tool-gq65yveqrtwkqlxqmjznxt.streamlit.app/)**  
+👉 <a href="https://pdf-tool-gq65yveqrtwkqlxqmjznxt.streamlit.app/" target="_blank">Launch the PDF Tool App</a>  
 
 No installation needed — just upload your PDFs and start working instantly!
 
