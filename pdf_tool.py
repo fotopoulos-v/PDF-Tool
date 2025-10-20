@@ -490,6 +490,10 @@ elif action == "Convert to PDF":
                 \setlength{{\fboxsep}}{{0pt}}
 
                 \begin{{document}}
+                % Add invisible title to reset layout
+                \mbox{{}}
+                \vspace{{-\baselineskip}}
+
                 \begin{{minted}}[
                 breaklines,
                 breakanywhere,
