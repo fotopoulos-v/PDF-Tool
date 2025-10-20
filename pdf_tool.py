@@ -459,33 +459,37 @@ elif action == "Convert to PDF":
 
                 # --- PY Conversion (with syntax highlighting, fixed) ---
                 elif file_extension == ".py":
+                    import textwrap
+                    
                     py_content = uploaded_file.getvalue().decode("utf-8")
-
-                    # Escape only LaTeX special characters except dash '-'
+                    # Remove common leading whitespace
+                    py_content = textwrap.dedent(py_content)
+                    
+                    # Escape LaTeX special characters in filenames for use as titles
                     def escape_latex_title(filename: str) -> str:
                         """Escape LaTeX special characters in filenames for use as titles."""
+                        # Handle backslash first
+                        filename = filename.replace('\\', '\\textbackslash{}')
+                        
                         specials = {
-                            '\\': '\\textbackslash{}',
                             '{': '\\{',
                             '}': '\\}',
                             '$': '\\$',
                             '&': '\\&',
                             '%': '\\%',
                             '#': '\\#',
-                            '_': '\\_',
+                            '_': '\\_',  # Escape underscore to prevent subscript
                             '~': '\\textasciitilde{}',
                             '^': '\\textasciicircum{}',
-                            '-': '{-}',  # Wrap hyphen in braces to prevent ligatures
                         }
                         
                         result = filename
                         for char, replacement in specials.items():
                             result = result.replace(char, replacement)
-                        
                         return result
-
+                    
                     title_safe = escape_latex_title(original_name)
-
+                    
                     latex_template = fr"""
                 \documentclass[12pt,a4paper]{{article}}
                 \usepackage[margin=1in]{{geometry}}
@@ -493,33 +497,27 @@ elif action == "Convert to PDF":
                 \usepackage{{xcolor}}
                 \usepackage{{fancyhdr}}
                 \usepackage{{titlesec}}
-
                 % --- Header/footer removed for filename only on first page ---
                 \pagestyle{{plain}}
-
                 % Optional: reduce spacing before code
                 \titlespacing*{{\section}}{{0pt}}{{0pt}}{{0pt}}
-
                 \begin{{document}}
-
                 % Filename as first page heading (verbatim, preserves dash)
                 \begin{{center}}
-                    \Large \textbf{{\texttt{{{title_safe}}}}}
+                \Large \textbf{{\texttt{{{title_safe}}}}}
                 \end{{center}}
                 \vspace{{0.5cm}}
-
                 % Python code with syntax highlighting, no line numbers, wrapped lines
                 \begin{{minted}}[
-                    breaklines,
-                    breakanywhere,
-                    fontsize=\small
+                breaklines,
+                breakanywhere,
+                fontsize=\small
                 ]{{python}}
                 {py_content}
                 \end{{minted}}
-
                 \end{{document}}
                 """
-
+                    
                     tex_path = os.path.join(temp_dir, "py_file.tex")
                     with open(tex_path, "w", encoding="utf-8") as f:
                         f.write(latex_template)
@@ -527,6 +525,7 @@ elif action == "Convert to PDF":
                     # Compile LaTeX with xelatex and minted
                     cmd_xelatex = ["xelatex", "-shell-escape", "-interaction=batchmode", tex_path]
                     result = subprocess.run(cmd_xelatex, cwd=temp_dir, capture_output=True, text=True, timeout=120)
+                    
                     pdf_file = os.path.join(temp_dir, "py_file.pdf")
                     if os.path.exists(pdf_file):
                         os.rename(pdf_file, output_path)
