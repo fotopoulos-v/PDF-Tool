@@ -471,7 +471,7 @@ elif action == "Convert to PDF":
                     c.save()
                     conversion_success = True
 
-                # --- PY Conversion (syntax highlighting only, no title) ---
+                # --- PY Conversion (syntax highlighting only, no title, left-aligned) ---
                 elif file_extension == ".py":
                     import textwrap
                     
@@ -486,8 +486,11 @@ elif action == "Convert to PDF":
                 \usepackage{{fancyhdr}}
                 \usepackage{{titlesec}}
 
-                \pagestyle{{plain}}
+                \pagestyle{{empty}} % no headers or footers
                 \titlespacing*{{\section}}{{0pt}}{{0pt}}{{0pt}}
+
+                \setlength{{\parindent}}{{0pt}} % no paragraph indentation
+                \setlength{{\leftmargini}}{{0pt}} % no list indentation
 
                 \begin{{document}}
 
@@ -495,7 +498,9 @@ elif action == "Convert to PDF":
                 \begin{{minted}}[
                     breaklines,
                     breakanywhere,
-                    fontsize=\small
+                    fontsize=\small,
+                    xleftmargin=0pt,
+                    baselinestretch=1.1
                 ]{{python}}
                 {py_content}
                 \end{{minted}}
@@ -517,6 +522,7 @@ elif action == "Convert to PDF":
                     else:
                         conversion_success = False
                         error_message = result.stderr or "LaTeX compilation failed."
+
 
 
                 # --- DOC/DOCX/ODT Conversion ---
