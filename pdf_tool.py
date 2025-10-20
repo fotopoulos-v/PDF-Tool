@@ -485,8 +485,7 @@ elif action == "Convert to PDF":
                             "jupyter-nbconvert", "--to", "latex", 
                             input_path, 
                             "--output", latex_output_name, 
-                            # FIX: Add --no-prompt to remove 'In [ ]:' and 'Out [ ]:' labels/text
-                            "--no-prompt", 
+                            # FIX: Removed the "--template" argument to rely on internal default
                             "--output-dir", temp_dir 
                         ]
                         
