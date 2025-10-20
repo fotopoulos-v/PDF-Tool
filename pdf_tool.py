@@ -8,6 +8,7 @@ import fitz  # PyMuPDF
 # Import for new feature
 import json
 import io
+import re # Import for regex handling of HTML/TeX content
 
 st.set_page_config(page_title="PDF Tool", layout="wide")
 st.markdown("""
@@ -473,65 +474,84 @@ elif action == "Convert to PDF":
                     conversion_success, error_message = run_subprocess(cmd, input_path, output_path)
 
                 
+                # --- IPYNB Conversion (Using LaTeX pipeline with Post-Processing) ---
                 elif file_extension == ".ipynb":
                     
-                    # 1. Use nbconvert to convert ipynb to LaTeX
                     latex_output_name = "notebook_output.tex"
                     latex_output_path = os.path.join(temp_dir, latex_output_name)
                     
-                    try:
-                        # Command for LaTeX generation (using the system default template)
-                        cmd_nbconvert = [
-                            "jupyter-nbconvert", "--to", "latex", 
-                            input_path, 
-                            "--output", latex_output_name, 
-                            # FIX: Use --no-input to remove all source code blocks and the associated "Input" label.
-                            "--no-input", 
-                            "--no-prompt", 
-                            "--output-dir", temp_dir 
-                        ]
+                    st.info(f"Using the **LaTeX pipeline** with custom post-processing to ensure the PDF's main title is set to: **{original_name}**.")
+                    
+                    # 1. Run nbconvert to IPYNB -> LaTeX (still using standard flags to suppress most)
+                    cmd_nbconvert = [
+                        "jupyter-nbconvert", "--to", "latex", 
+                        input_path, 
+                        "--output", latex_output_name, 
+                        # Use --no-input and --no-prompt as the base for suppression
+                        "--no-input", 
+                        "--no-prompt", 
+                        "--output-dir", temp_dir 
+                    ]
+                    
+                    result_nbconvert = subprocess.run(cmd_nbconvert, capture_output=True, text=True, timeout=120)
+                    
+                    if result_nbconvert.returncode == 0 and os.path.exists(latex_output_path):
                         
-                        st.info("Attempting conversion using the high-quality **LaTeX pipeline** (nbconvert -> LaTeX -> PDF)...")
+                        # 2. POST-PROCESS the generated LaTeX file to remove residual headers and set the title
+                        try:
+                            with open(latex_output_path, 'r', encoding='utf-8') as f:
+                                latex_content = f.read()
+                                
+                            # A. Set the document title to the filename to override the default template title,
+                            # which often prints the offending "Input" text.
+                            title_command = f"\\title{{{original_name}}}"
+                            
+                            # Find the existing \title{...} command and replace it (safer than appending)
+                            latex_content = re.sub(r'\\title\{.*?\}', title_command, latex_content, flags=re.DOTALL)
+                            
+                            # Ensure \maketitle is called after \begin{document}
+                            if "\\maketitle" not in latex_content:
+                                 latex_content = latex_content.replace("\\begin{document}", "\\begin{document}\n\\maketitle")
+                                 
+                            # B. Aggressive string removal of common residual "Input" or related structures 
+                            # (This is a safety measure, the title replacement should fix the main issue)
+                            # Remove residual environments/commands that might be around the suppressed input blocks
+                            latex_content = re.sub(r'\\begin\{.*?\}(Input|Code Source|In/Out)\{.*?\}', '', latex_content)
+                            latex_content = re.sub(r'\\end\{.*?\}(Input|Code Source|In/Out)\{.*?\}', '', latex_content)
+
+                            # Re-save the modified LaTeX content
+                            with open(latex_output_path, 'w', encoding='utf-8') as f:
+                                f.write(latex_content)
+                                
+                        except Exception as e:
+                            raise Exception(f"LaTeX Post-Processing Failed: {e}")
+                            
+                        # 3. Compile the MODIFIED LaTeX file to PDF using xelatex
+                        xelatex_cmd = ["xelatex", "--interaction=batchmode", latex_output_name]
                         
-                        # Run nbconvert to IPYNB -> LaTeX.
-                        result_nbconvert = subprocess.run(cmd_nbconvert, capture_output=True, text=True, timeout=120)
+                        st.info("2. Compiling LaTeX to PDF (running xelatex twice)...")
                         
-                        if result_nbconvert.returncode == 0 and os.path.exists(latex_output_path):
-                            
-                            # 2. Compile the LaTeX file to PDF using xelatex
-                            xelatex_cmd = ["xelatex", "--interaction=batchmode", latex_output_name]
-                            
-                            st.info("Compiling LaTeX to PDF (running xelatex twice)...")
-                            
-                            # First run (for auxiliary files, TOC, etc.)
-                            subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120) 
-                            # Second run (to resolve references/TOC)
-                            result_xelatex = subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120) 
-                            
-                            final_pdf_name = Path(latex_output_name).stem + ".pdf" 
-                            final_pdf_path_temp = os.path.join(temp_dir, final_pdf_name)
-                            
-                            if os.path.exists(final_pdf_path_temp):
-                                # Rename output file to 'output.pdf' 
-                                os.rename(final_pdf_path_temp, output_path)
-                                conversion_success = True
-                            else:
-                                conversion_success = False
-                                # Provides detailed error about LaTeX compilation failure
-                                error_message = (
-                                    f"LaTeX compilation failed. Ensure the notebook content is valid for TeX and that all "
-                                    f"LaTeX dependencies are installed (xelatex, texlive packages). "
-                                    f"Error Details: {result_xelatex.stderr or result_xelatex.stdout}"
-                                )
+                        # First run
+                        subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120) 
+                        # Second run
+                        result_xelatex = subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120) 
+                        
+                        final_pdf_name = Path(latex_output_name).stem + ".pdf" 
+                        final_pdf_path_temp = os.path.join(temp_dir, final_pdf_name)
+                        
+                        if os.path.exists(final_pdf_path_temp):
+                            # Rename output file to 'output.pdf' 
+                            os.rename(final_pdf_path_temp, output_path)
+                            conversion_success = True
                         else:
-                            error_message = f"Jupyter Notebook conversion to LaTeX failed: {result_nbconvert.stderr}"
+                            conversion_success = False
+                            error_message = (
+                                f"LaTeX compilation failed. The notebook content may contain incompatible TeX/Unicode characters. "
+                                f"Compilation Output: {result_xelatex.stderr or result_xelatex.stdout}"
+                            )
+                    else:
+                        error_message = f"Jupyter Notebook conversion to LaTeX failed: {result_nbconvert.stderr}"
                             
-                    except ImportError:
-                         error_message = "Python package 'nbconvert' not found. Please install it."
-                    except Exception as e:
-                        error_message = f"Notebook conversion error: {e}"
-
-
                 # --- Final Result Display ---
                 status_container.empty()
                 if conversion_success:
@@ -549,7 +569,7 @@ elif action == "Convert to PDF":
                             mime="application/pdf"
                         )
                     if file_extension == ".ipynb":
-                         st.info("The notebook was rendered using the **LaTeX pipeline**. Note that the **source code (inputs) were removed** to ensure a clean, report-style PDF free of the 'Input' label. Markdown and code outputs are retained.")
+                         st.info(f"The notebook was rendered using the **LaTeX pipeline**. The document title is successfully set to: **{original_name}**.")
                 else:
                     st.error(f"❌ Conversion failed. Error: {error_message}")
                     st.info("Conversion relies on external system tools (`pandoc`, `wkhtmltopdf`, `xelatex`) that must be listed in a `packages.txt` file for deployment. Please verify your dependencies.")
