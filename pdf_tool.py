@@ -440,12 +440,11 @@ elif action == "Convert to PDF":
                     
                     c = canvas.Canvas(output_path, pagesize=letter)
                     width, height = letter
-                    margin = 0.75 * inch  # 0.75 inch margins all around
+                    margin = 0.75 * inch
                     y = height - margin
                     c.setFont("Courier", 10)
                     
                     for line in text.split("\n"):
-                        # wrap lines if too long
                         while len(line) > 0:
                             c.drawString(margin, y, line[:95])
                             line = line[95:]
@@ -457,18 +456,15 @@ elif action == "Convert to PDF":
                     c.save()
                     conversion_success = True
 
-                # --- PY Conversion (with syntax highlighting, fixed) ---
+                # --- PY Conversion (with syntax highlighting) ---
                 elif file_extension == ".py":
                     import textwrap
                     
                     py_content = uploaded_file.getvalue().decode("utf-8")
-                    # Remove common leading whitespace and strip leading/trailing newlines
                     py_content = textwrap.dedent(py_content).strip()
                     
-                    # Escape LaTeX special characters in filenames for use as titles
                     def escape_latex_title(filename: str) -> str:
-                        """Escape LaTeX special characters in filenames for use as titles."""
-                        # In \texttt context, only escape what's necessary
+                        """Escape LaTeX special characters in filenames."""
                         specials = {
                             '\\': '\\textbackslash{}',
                             '{': '\\{',
@@ -477,10 +473,10 @@ elif action == "Convert to PDF":
                             '&': '\\&',
                             '%': '\\%',
                             '#': '\\#',
+                            '_': '\\_',
                             '~': '\\textasciitilde{}',
                             '^': '\\textasciicircum{}',
                         }
-                        
                         result = filename
                         for char, replacement in specials.items():
                             result = result.replace(char, replacement)
@@ -495,17 +491,13 @@ elif action == "Convert to PDF":
 \usepackage{{xcolor}}
 \usepackage{{fancyhdr}}
 \usepackage{{titlesec}}
-% --- Header/footer removed for filename only on first page ---
 \pagestyle{{plain}}
-% Optional: reduce spacing before code
 \titlespacing*{{\section}}{{0pt}}{{0pt}}{{0pt}}
 \begin{{document}}
-% Filename as first page heading (verbatim, preserves dash)
 \begin{{center}}
-\Large \textbf{{\texttt{{{title_safe}}}}}
+\Large \textbf{{\ttfamily {title_safe}}}
 \end{{center}}
 \vspace{{0.5cm}}
-% Python code with syntax highlighting, no line numbers, wrapped lines
 \begin{{minted}}[
 breaklines,
 breakanywhere,
@@ -520,7 +512,6 @@ fontsize=\small
                     with open(tex_path, "w", encoding="utf-8") as f:
                         f.write(latex_template)
                     
-                    # Compile LaTeX with xelatex and minted
                     cmd_xelatex = ["xelatex", "-shell-escape", "-interaction=batchmode", tex_path]
                     result = subprocess.run(cmd_xelatex, cwd=temp_dir, capture_output=True, text=True, timeout=120)
                     
