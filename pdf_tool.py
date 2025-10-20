@@ -442,29 +442,35 @@ elif action == "Convert to PDF":
                         content = uploaded_file.getvalue().decode('utf-8')
                         md_input_path = os.path.join(temp_dir, "input.md")
                         
-                        # Use fenced code block for syntax highlighting of python files
+                        # --- Improved title and formatting ---
                         if file_extension == ".py":
-                            md_content = f"# Converted Document\n\n```python\n{content}\n```"
-                        else: # .txt
-                            md_content = f"# Converted Document\n\n{content}"
+                            md_content = f"# {original_name}\n\n```python\n{content}\n```"
+                        else:
+                            md_content = f"# {original_name}\n\n{content}"
                         
                         with open(md_input_path, "w", encoding="utf-8") as f:
                             f.write(md_content)
                             
                         pandoc_input = md_input_path
-                        
-                    else: # .doc, .docx, .odt
+                    else:
                         pandoc_input = input_path
-                    
+
                     # Pandoc command: input -> HTML
                     cmd_pandoc = ["pandoc", pandoc_input, "-o", html_path, "--standalone"]
-                    
                     success, error_message = run_subprocess(cmd_pandoc, pandoc_input, html_path)
-                    
+
                     if success:
-                        # 2. Convert HTML to PDF using wkhtmltopdf
-                        cmd_wkhtml = ["wkhtmltopdf", "--quiet", html_path, output_path]
+                        # --- Adjusted margins for nicer layout ---
+                        cmd_wkhtml = [
+                            "wkhtmltopdf", "--quiet",
+                            "--margin-top", "20mm",
+                            "--margin-bottom", "20mm",
+                            "--margin-left", "10mm",
+                            "--margin-right", "10mm",
+                            html_path, output_path
+                        ]
                         conversion_success, error_message = run_subprocess(cmd_wkhtml, html_path, output_path)
+
                 
                 
                 elif file_extension == ".html":
