@@ -480,6 +480,16 @@ elif action == "Convert to PDF":
                     latex_output_path = os.path.join(temp_dir, latex_output_name)
                     
                     try:
+                        import json
+                        with open(input_path, "r", encoding="utf-8") as f:
+                            notebook_json = json.load(f)
+
+                        # Set title metadata to the original filename
+                        notebook_json.setdefault("metadata", {})["title"] = original_name
+
+                        with open(input_path, "w", encoding="utf-8") as f:
+                            json.dump(notebook_json, f)
+
                         # Command for LaTeX generation (using the system default template)
                         cmd_nbconvert = [
                             "jupyter-nbconvert", "--to", "latex", 
