@@ -471,7 +471,7 @@ elif action == "Convert to PDF":
                     c.save()
                     conversion_success = True
 
-               # --- PY Conversion (syntax highlighting only, no title, truly left-aligned) ---
+                # --- PY Conversion (syntax highlighting only, no title, truly left-aligned) ---
                 elif file_extension == ".py":
                     import textwrap
                     py_content = uploaded_file.getvalue().decode("utf-8")
@@ -482,25 +482,20 @@ elif action == "Convert to PDF":
                 \usepackage[margin=1in]{{geometry}}
                 \usepackage{{minted}}
                 \usepackage{{xcolor}}
-                \usepackage{{fancyhdr}}
-                \usepackage{{titlesec}}
                 \pagestyle{{empty}}
-                \titlespacing*{{\section}}{{0pt}}{{0pt}}{{0pt}}
                 \setlength{{\parindent}}{{0pt}}
                 \setlength{{\parskip}}{{0pt}}
 
+                % Force minted to have no left margin or padding
+                \setlength{{\fboxsep}}{{0pt}}
+
                 \begin{{document}}
-                \noindent
                 \begin{{minted}}[
                 breaklines,
                 breakanywhere,
                 fontsize=\small,
                 xleftmargin=0pt,
-                frame=none,
-                framesep=0pt,
-                numbersep=0pt,
-                baselinestretch=1.1,
-                autogobble=false
+                resetmargins=true
                 ]{{python}}
                 {py_content}
                 \end{{minted}}
