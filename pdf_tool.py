@@ -482,7 +482,7 @@ elif action == "Convert to PDF":
                     
                     latex_template = fr"""
                 \documentclass[12pt,a4paper]{{article}}
-                \usepackage[margin=1in]{{geometry}}
+                \usepackage[margin=0.5in]{{geometry}}  % Reduced all margins
                 \usepackage{{minted}}
                 \usepackage{{xcolor}}
                 \usepackage{{fvextra}}
@@ -493,23 +493,23 @@ elif action == "Convert to PDF":
                 \setlength{{\headheight}}{{0pt}}
                 \setlength{{\headsep}}{{0pt}}
                 \setlength{{\footskip}}{{0pt}}
+                \setlength{{\textheight}}{{0.95\textheight}}  % Reduce text height to minimize bottom margin
 
                 \begin{{document}}
-                \vspace*{{-\topmargin}}
-                \vspace*{{-\headheight}}
-                \vspace*{{-\headsep}}
-                \vspace*{{0pt}}
+                \vspace*{{-2em}}  % Pull content up further
                 \begin{{minted}}[
                 breaklines,
                 breakanywhere,
                 fontsize=\small,
-                framesep=0pt,           % Remove frame spacing
-                xleftmargin=0pt,        % No left margin
-                xrightmargin=0pt,       % No right margin
-                resetmargins=true,      % Reset all margins
-                gobble=0,               # No line gobbling
-                rulecolor=,             # No frame rules
-                framerule=0pt           # No frame rules
+                framesep=2pt,      % Reduced frame separation
+                xleftmargin=0pt,
+                xrightmargin=0pt,
+                resetmargins=true,
+                gobble=0,
+                rulecolor=,
+                framerule=0pt,
+                firstnumber=0,
+                linenos=false      % Ensure line numbers are disabled
                 ]{{python}}
                 {py_content}
                 \end{{minted}}
@@ -530,7 +530,6 @@ elif action == "Convert to PDF":
                     else:
                         conversion_success = False
                         error_message = result.stderr or "LaTeX compilation failed."
-
 
 
                 # --- DOC/DOCX/ODT Conversion ---
