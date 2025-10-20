@@ -430,64 +430,56 @@ elif action == "Convert to PDF":
                 conversion_success = False
                 error_message = ""
                 
-                # --- Conversion Logic ---
-                
-                # Files converted via Pandoc -> HTML -> wkhtmltopdf
-                if file_extension in [".txt", ".py", ".doc", ".docx", ".odt"]:
+                # --- Conversion Logic for common files (Pandoc -> HTML -> wkhtmltopdf) ---
+                if file_extension in [".txt", ".py", ".doc", ".docx", ".odt", ".html"]:
                     
-                    # 1. Convert source file to intermediate HTML using pandoc
-                    html_path = os.path.join(temp_dir, "temp_output.html")
-                    
-                    # For TXT/PY, we wrap content in a Markdown block for pandoc to process nicely
-                    if file_extension in [".txt", ".py"]:
-                        content = uploaded_file.getvalue().decode('utf-8')
-                        md_input_path = os.path.join(temp_dir, "input.md")
+                    # For .html, we can try wkhtmltopdf directly. For others, we use Pandoc to HTML first.
+                    if file_extension == ".html":
+                        html_path = input_path
+                    else:
+                        # 1. Convert source file to intermediate HTML using pandoc
+                        html_path = os.path.join(temp_dir, "temp_output.html")
                         
-                        # Use fenced code block for syntax highlighting of python files
-                        if file_extension == ".py":
-                            md_content = f"# Converted Document\n\n```python\n{content}\n```"
-                        else: # .txt
-                            md_content = f"# Converted Document\n\n{content}"
-                        
-                        with open(md_input_path, "w", encoding="utf-8") as f:
-                            f.write(md_content)
+                        if file_extension in [".txt", ".py"]:
+                            content = uploaded_file.getvalue().decode('utf-8')
+                            md_input_path = os.path.join(temp_dir, "input.md")
                             
-                        pandoc_input = md_input_path
+                            if file_extension == ".py":
+                                md_content = f"# Converted Document\n\n```python\n{content}\n```"
+                            else: 
+                                md_content = f"# Converted Document\n\n{content}"
+                            
+                            with open(md_input_path, "w", encoding="utf-8") as f:
+                                f.write(md_content)
+                                
+                            pandoc_input = md_input_path
+                            
+                        else: # .doc, .docx, .odt
+                            pandoc_input = input_path
                         
-                    else: # .doc, .docx, .odt
-                        pandoc_input = input_path
+                        cmd_pandoc = ["pandoc", pandoc_input, "-o", html_path, "--standalone"]
+                        success, error_message = run_subprocess(cmd_pandoc, pandoc_input, html_path)
+                        if not success:
+                            raise Exception(f"Pandoc conversion failed: {error_message}")
                     
-                    # Pandoc command: input -> HTML
-                    cmd_pandoc = ["pandoc", pandoc_input, "-o", html_path, "--standalone"]
-                    
-                    success, error_message = run_subprocess(cmd_pandoc, pandoc_input, html_path)
-                    
-                    if success:
-                        # 2. Convert HTML to PDF using wkhtmltopdf
-                        cmd_wkhtml = ["wkhtmltopdf", "--quiet", html_path, output_path]
-                        conversion_success, error_message = run_subprocess(cmd_wkhtml, html_path, output_path)
+                    # 2. Convert HTML to PDF using wkhtmltopdf
+                    cmd_wkhtml = ["wkhtmltopdf", "--quiet", html_path, output_path]
+                    conversion_success, error_message = run_subprocess(cmd_wkhtml, html_path, output_path)
                 
                 
-                elif file_extension == ".html":
-                    # HTML to PDF directly using wkhtmltopdf
-                    cmd = ["wkhtmltopdf", "--quiet", input_path, output_path]
-                    conversion_success, error_message = run_subprocess(cmd, input_path, output_path)
-
-                
-                # --- IPYNB Conversion (Using LaTeX pipeline with Post-Processing) ---
+                # --- IPYNB Conversion (LaTeX pipeline with ROBUST Post-Processing) ---
                 elif file_extension == ".ipynb":
                     
                     latex_output_name = "notebook_output.tex"
                     latex_output_path = os.path.join(temp_dir, latex_output_name)
                     
-                    st.info(f"Using the **LaTeX pipeline** with custom post-processing to ensure the PDF's main title is set to: **{original_name}**.")
+                    st.info(f"Using the **LaTeX pipeline** with robust cleanup to set the document title to: **{original_name}**.")
                     
-                    # 1. Run nbconvert to IPYNB -> LaTeX (still using standard flags to suppress most)
+                    # 1. Run nbconvert to IPYNB -> LaTeX (using standard flags)
                     cmd_nbconvert = [
                         "jupyter-nbconvert", "--to", "latex", 
                         input_path, 
                         "--output", latex_output_name, 
-                        # Use --no-input and --no-prompt as the base for suppression
                         "--no-input", 
                         "--no-prompt", 
                         "--output-dir", temp_dir 
@@ -497,27 +489,31 @@ elif action == "Convert to PDF":
                     
                     if result_nbconvert.returncode == 0 and os.path.exists(latex_output_path):
                         
-                        # 2. POST-PROCESS the generated LaTeX file to remove residual headers and set the title
+                        # 2. ROBUST POST-PROCESSING: Clean up and force a single, correct title block
                         try:
                             with open(latex_output_path, 'r', encoding='utf-8') as f:
                                 latex_content = f.read()
                                 
-                            # A. Set the document title to the filename to override the default template title,
-                            # which often prints the offending "Input" text.
-                            title_command = f"\\title{{{original_name}}}"
+                            # A. Strip all existing \title, \author, \date, and \maketitle commands globally
+                            # This prevents corruption from residual template environments
+                            latex_content = re.sub(r'\\title\{.*?\}', '', latex_content, flags=re.DOTALL)
+                            latex_content = re.sub(r'\\author\{.*?\}', '', latex_content, flags=re.DOTALL)
+                            latex_content = re.sub(r'\\date\{.*?\}', '', latex_content, flags=re.DOTALL)
+                            latex_content = latex_content.replace("\\maketitle", '') # Remove ALL \maketitle instances
                             
-                            # Find the existing \title{...} command and replace it (safer than appending)
-                            latex_content = re.sub(r'\\title\{.*?\}', title_command, latex_content, flags=re.DOTALL)
-                            
-                            # Ensure \maketitle is called after \begin{document}
-                            if "\\maketitle" not in latex_content:
-                                 latex_content = latex_content.replace("\\begin{document}", "\\begin{document}\n\\maketitle")
-                                 
-                            # B. Aggressive string removal of common residual "Input" or related structures 
-                            # (This is a safety measure, the title replacement should fix the main issue)
-                            # Remove residual environments/commands that might be around the suppressed input blocks
-                            latex_content = re.sub(r'\\begin\{.*?\}(Input|Code Source|In/Out)\{.*?\}', '', latex_content)
-                            latex_content = re.sub(r'\\end\{.*?\}(Input|Code Source|In/Out)\{.*?\}', '', latex_content)
+                            # B. Construct the clean replacement block 
+                            replacement_block = (
+                                f"\\begin{{document}}\n"
+                                f"% --- Custom Title Block START ---\n"
+                                f"\\title{{{original_name}}}\n"
+                                f"\\author{{}}\n" # Empty author for clean look
+                                f"\\date{{}}\n" # Empty date
+                                f"\\maketitle\n"
+                                f"% --- Custom Title Block END ---\n"
+                            )
+
+                            # C. Inject the clean block immediately after the original \begin{document}
+                            latex_content = latex_content.replace("\\begin{document}", replacement_block) 
 
                             # Re-save the modified LaTeX content
                             with open(latex_output_path, 'w', encoding='utf-8') as f:
@@ -526,21 +522,18 @@ elif action == "Convert to PDF":
                         except Exception as e:
                             raise Exception(f"LaTeX Post-Processing Failed: {e}")
                             
-                        # 3. Compile the MODIFIED LaTeX file to PDF using xelatex
+                        # 3. Compile the MODIFIED LaTeX file to PDF using xelatex (two runs for TOC/refs)
                         xelatex_cmd = ["xelatex", "--interaction=batchmode", latex_output_name]
                         
-                        st.info("2. Compiling LaTeX to PDF (running xelatex twice)...")
+                        st.info("Compiling LaTeX to PDF (running xelatex twice)...")
                         
-                        # First run
                         subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120) 
-                        # Second run
                         result_xelatex = subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120) 
                         
                         final_pdf_name = Path(latex_output_name).stem + ".pdf" 
                         final_pdf_path_temp = os.path.join(temp_dir, final_pdf_name)
                         
                         if os.path.exists(final_pdf_path_temp):
-                            # Rename output file to 'output.pdf' 
                             os.rename(final_pdf_path_temp, output_path)
                             conversion_success = True
                         else:
@@ -569,7 +562,7 @@ elif action == "Convert to PDF":
                             mime="application/pdf"
                         )
                     if file_extension == ".ipynb":
-                         st.info(f"The notebook was rendered using the **LaTeX pipeline**. The document title is successfully set to: **{original_name}**.")
+                         st.info(f"The notebook was rendered using the **LaTeX pipeline** with the document title successfully set to: **{original_name}**.")
                 else:
                     st.error(f"❌ Conversion failed. Error: {error_message}")
                     st.info("Conversion relies on external system tools (`pandoc`, `wkhtmltopdf`, `xelatex`) that must be listed in a `packages.txt` file for deployment. Please verify your dependencies.")
