@@ -471,58 +471,55 @@ elif action == "Convert to PDF":
                     c.save()
                     conversion_success = True
 
-                # --- PY Conversion (syntax highlighting only, no title, truly left-aligned) ---
+                # --- PY Conversion (syntax highlighting only, no title, balanced top, reduced bottom) ---
                 elif file_extension == ".py":
                     import textwrap
                     py_content = uploaded_file.getvalue().decode("utf-8")
                     py_content = textwrap.dedent(py_content).strip()
-                    
-                    # Add a blank line at the beginning to fix alignment
+
+                    # Blank line at top to avoid clipping first line
                     py_content = "\n" + py_content
-                    
+
                     latex_template = fr"""
                 \documentclass[12pt,a4paper]{{article}}
-                \usepackage[margin=0.5in]{{geometry}}  % Reduced all margins
+                \usepackage[top=1in,bottom=0.3in,left=0.7in,right=0.7in]{{geometry}}  % balanced layout
                 \usepackage{{minted}}
                 \usepackage{{xcolor}}
                 \usepackage{{fvextra}}
                 \pagestyle{{empty}}
                 \setlength{{\parindent}}{{0pt}}
                 \setlength{{\parskip}}{{0pt}}
-                \setlength{{\topskip}}{{0pt}}
-                \setlength{{\headheight}}{{0pt}}
-                \setlength{{\headsep}}{{0pt}}
-                \setlength{{\footskip}}{{0pt}}
-                \setlength{{\textheight}}{{0.95\textheight}}  % Reduce text height to minimize bottom margin
+                \setlength{{\footskip}}{{5pt}}  % minimal footer space
+                \setlength{{\textheight}}{{730pt}}  % extend text area to near bottom
 
                 \begin{{document}}
-                \vspace*{{-2em}}  % Pull content up further
+                \vspace*{{0.2cm}}  % small breathing space at top
                 \begin{{minted}}[
-                breaklines,
-                breakanywhere,
-                fontsize=\small,
-                framesep=2pt,      % Reduced frame separation
-                xleftmargin=0pt,
-                xrightmargin=0pt,
-                resetmargins=true,
-                gobble=0,
-                rulecolor=,
-                framerule=0pt,
-                firstnumber=0,
-                linenos=false      % Ensure line numbers are disabled
+                    breaklines,
+                    breakanywhere,
+                    fontsize=\small,
+                    framesep=0pt,
+                    xleftmargin=0pt,
+                    xrightmargin=0pt,
+                    resetmargins=true,
+                    gobble=0,
+                    rulecolor=,
+                    framerule=0pt,
+                    baselinestretch=1.05
                 ]{{python}}
                 {py_content}
                 \end{{minted}}
+                \vspace*{{-0.2cm}}
                 \end{{document}}
                 """
-                    
+
                     tex_path = os.path.join(temp_dir, "py_file.tex")
                     with open(tex_path, "w", encoding="utf-8") as f:
                         f.write(latex_template)
-                    
+
                     cmd_xelatex = ["xelatex", "-shell-escape", "-interaction=batchmode", tex_path]
                     result = subprocess.run(cmd_xelatex, cwd=temp_dir, capture_output=True, text=True, timeout=120)
-                    
+
                     pdf_file = os.path.join(temp_dir, "py_file.pdf")
                     if os.path.exists(pdf_file):
                         os.rename(pdf_file, output_path)
@@ -530,6 +527,7 @@ elif action == "Convert to PDF":
                     else:
                         conversion_success = False
                         error_message = result.stderr or "LaTeX compilation failed."
+
 
 
                 # --- DOC/DOCX/ODT Conversion ---
