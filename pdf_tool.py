@@ -457,7 +457,7 @@ elif action == "Convert to PDF":
                     c.save()
                     conversion_success = True
 
-                # --- PY Conversion (with syntax highlighting) ---
+                # --- PY Conversion (with syntax highlighting, fixed) ---
                 elif file_extension == ".py":
                     py_content = uploaded_file.getvalue().decode("utf-8")
                     latex_template = fr"""
@@ -467,18 +467,33 @@ elif action == "Convert to PDF":
 \usepackage{{xcolor}}
 \usepackage{{fancyhdr}}
 \usepackage{{titlesec}}
-\pagestyle{{fancy}}
-\fancyhf{{}}
-\lhead{{{original_name}}}
-\rhead{{}}
-\renewcommand{{\headrulewidth}}{{0.4pt}}
-\title{{{original_name}}}
+
+% --- Header/footer removed for filename only on first page ---
+\pagestyle{{plain}}
+
+% Optional: reduce spacing before code
+\titlespacing*{{\section}}{{0pt}}{{0pt}}{{0pt}}
+
 \begin{{document}}
-\begin{{minted}}[breaklines,fontsize=\small,linenos]{{python}}
+
+% Filename as first page heading
+\begin{{center}}
+    \Large \textbf{{{original_name}}}
+\end{{center}}
+\vspace{{0.5cm}}
+
+% Python code with syntax highlighting, no line numbers, wrapped lines
+\begin{{minted}}[
+    breaklines,
+    breakanywhere,
+    fontsize=\small
+]{{python}}
 {py_content}
 \end{{minted}}
+
 \end{{document}}
 """
+
                     tex_path = os.path.join(temp_dir, "py_file.tex")
                     with open(tex_path, "w", encoding="utf-8") as f:
                         f.write(latex_template)
