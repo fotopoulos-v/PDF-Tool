@@ -499,7 +499,7 @@ elif action == "Convert to PDF":
                             # 2. Compile the LaTeX file to PDF using xelatex
                             xelatex_cmd = ["xelatex", "--interaction=batchmode", latex_output_name]
                             
-                            st.info("Compiling LaTeX to PDF (running xelatex twice)...")
+                            st.info("Compiling LaTeX to PDF...")
                             
                             # First run (for auxiliary files, TOC, etc.)
                             subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120) 
@@ -546,8 +546,7 @@ elif action == "Convert to PDF":
                             file_name=output_filename,
                             mime="application/pdf"
                         )
-                    if file_extension == ".ipynb":
-                         st.info("The notebook was rendered using the **LaTeX pipeline**. This provides much better control over typography, mathematics, and complex outputs like wide tables, ensuring a clean A4 output without clipped or overly wrapped content.")
+
                 else:
                     st.error(f"❌ Conversion failed. Error: {error_message}")
                     st.info("Conversion relies on external system tools (`pandoc`, `wkhtmltopdf`, `xelatex`) that must be listed in a `packages.txt` file for deployment. Please verify your dependencies.")
