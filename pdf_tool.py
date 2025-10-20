@@ -429,7 +429,7 @@ elif action == "Convert to PDF":
                 conversion_success = False
                 error_message = ""
 
-                # --- TXT Conversion (fixed line wrapping) ---
+                # --- TXT Conversion (fixed blank lines + proper wrapping) ---
                 if file_extension == ".txt":
                     from reportlab.pdfgen import canvas
                     from reportlab.lib.pagesizes import letter
@@ -442,15 +442,23 @@ elif action == "Convert to PDF":
                     c = canvas.Canvas(output_path, pagesize=letter)
                     width, height = letter
                     margin = 0.75 * inch
-                    usable_width = width - 2 * margin  # total printable width
+                    usable_width = width - 2 * margin
                     y = height - margin
                     c.setFont("Courier", 10)
-                    
-                    # Estimate average character width (Courier is monospaced)
+
                     char_width = c.stringWidth("A", "Courier", 10)
                     max_chars = int(usable_width / char_width)
-                    
+
                     for line in text.split("\n"):
+                        # Handle blank lines explicitly
+                        if line.strip() == "":
+                            y -= 12
+                            if y < margin:
+                                c.showPage()
+                                y = height - margin
+                                c.setFont("Courier", 10)
+                            continue
+
                         wrapped_lines = textwrap.wrap(line, width=max_chars)
                         for wrapped_line in wrapped_lines:
                             c.drawString(margin, y, wrapped_line)
@@ -459,6 +467,7 @@ elif action == "Convert to PDF":
                                 c.showPage()
                                 y = height - margin
                                 c.setFont("Courier", 10)
+
                     c.save()
                     conversion_success = True
 
