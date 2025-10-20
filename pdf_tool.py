@@ -462,23 +462,21 @@ elif action == "Convert to PDF":
                     import textwrap
                     
                     py_content = uploaded_file.getvalue().decode("utf-8")
-                    # Remove common leading whitespace
-                    py_content = textwrap.dedent(py_content)
+                    # Remove common leading whitespace and strip leading/trailing newlines
+                    py_content = textwrap.dedent(py_content).strip()
                     
                     # Escape LaTeX special characters in filenames for use as titles
                     def escape_latex_title(filename: str) -> str:
                         """Escape LaTeX special characters in filenames for use as titles."""
-                        # Handle backslash first
-                        filename = filename.replace('\\', '\\textbackslash{}')
-                        
+                        # In \texttt context, only escape what's necessary
                         specials = {
+                            '\\': '\\textbackslash{}',
                             '{': '\\{',
                             '}': '\\}',
                             '$': '\\$',
                             '&': '\\&',
                             '%': '\\%',
                             '#': '\\#',
-                            '_': '\\_',  # Escape underscore to prevent subscript
                             '~': '\\textasciitilde{}',
                             '^': '\\textasciicircum{}',
                         }
@@ -491,32 +489,32 @@ elif action == "Convert to PDF":
                     title_safe = escape_latex_title(original_name)
                     
                     latex_template = fr"""
-                \documentclass[12pt,a4paper]{{article}}
-                \usepackage[margin=1in]{{geometry}}
-                \usepackage{{minted}}
-                \usepackage{{xcolor}}
-                \usepackage{{fancyhdr}}
-                \usepackage{{titlesec}}
-                % --- Header/footer removed for filename only on first page ---
-                \pagestyle{{plain}}
-                % Optional: reduce spacing before code
-                \titlespacing*{{\section}}{{0pt}}{{0pt}}{{0pt}}
-                \begin{{document}}
-                % Filename as first page heading (verbatim, preserves dash)
-                \begin{{center}}
-                \Large \textbf{{\texttt{{{title_safe}}}}}
-                \end{{center}}
-                \vspace{{0.5cm}}
-                % Python code with syntax highlighting, no line numbers, wrapped lines
-                \begin{{minted}}[
-                breaklines,
-                breakanywhere,
-                fontsize=\small
-                ]{{python}}
-                {py_content}
-                \end{{minted}}
-                \end{{document}}
-                """
+\documentclass[12pt,a4paper]{{article}}
+\usepackage[margin=1in]{{geometry}}
+\usepackage{{minted}}
+\usepackage{{xcolor}}
+\usepackage{{fancyhdr}}
+\usepackage{{titlesec}}
+% --- Header/footer removed for filename only on first page ---
+\pagestyle{{plain}}
+% Optional: reduce spacing before code
+\titlespacing*{{\section}}{{0pt}}{{0pt}}{{0pt}}
+\begin{{document}}
+% Filename as first page heading (verbatim, preserves dash)
+\begin{{center}}
+\Large \textbf{{\texttt{{{title_safe}}}}}
+\end{{center}}
+\vspace{{0.5cm}}
+% Python code with syntax highlighting, no line numbers, wrapped lines
+\begin{{minted}}[
+breaklines,
+breakanywhere,
+fontsize=\small
+]{{python}}
+{py_content}
+\end{{minted}}
+\end{{document}}
+"""
                     
                     tex_path = os.path.join(temp_dir, "py_file.tex")
                     with open(tex_path, "w", encoding="utf-8") as f:
