@@ -460,9 +460,12 @@ elif action == "Convert to PDF":
                 # --- PY Conversion (with syntax highlighting, fixed) ---
                 elif file_extension == ".py":
                     py_content = uploaded_file.getvalue().decode("utf-8")
+                    # Escape underscores and special LaTeX chars in filename
+                    escaped_name = original_name.replace("_", r"\_").replace("&", r"\&").replace("%", r"\%")
+                    
                     latex_template = fr"""
 \documentclass[12pt,a4paper]{{article}}
-\usepackage[margin=1in]{{geometry}}
+\usepackage[margin=2cm]{{geometry}}
 \usepackage{{minted}}
 \usepackage{{xcolor}}
 \usepackage{{fancyhdr}}
@@ -476,9 +479,9 @@ elif action == "Convert to PDF":
 
 \begin{{document}}
 
-% Filename as first page heading
+% Filename as first page heading only
 \begin{{center}}
-    \Large \textbf{{{original_name}}}
+    \Large \textbf{{{escaped_name}}}
 \end{{center}}
 \vspace{{0.5cm}}
 
@@ -499,15 +502,20 @@ elif action == "Convert to PDF":
                         f.write(latex_template)
                     
                     # Compile LaTeX with xelatex and minted
-                    cmd_xelatex = ["xelatex", "-shell-escape", "-interaction=batchmode", tex_path]
-                    result = subprocess.run(cmd_xelatex, cwd=temp_dir, capture_output=True, text=True, timeout=120)
-                    pdf_file = os.path.join(temp_dir, "py_file.pdf")
-                    if os.path.exists(pdf_file):
-                        os.rename(pdf_file, output_path)
-                        conversion_success = True
-                    else:
+                    try:
+                        cmd_xelatex = ["xelatex", "-shell-escape", "-interaction=batchmode", tex_path]
+                        subprocess.run(cmd_xelatex, cwd=temp_dir, capture_output=True, text=True, timeout=120, check=True)
+                        subprocess.run(cmd_xelatex, cwd=temp_dir, capture_output=True, text=True, timeout=120, check=True)
+                        pdf_file = os.path.join(temp_dir, "py_file.pdf")
+                        if os.path.exists(pdf_file):
+                            os.rename(pdf_file, output_path)
+                            conversion_success = True
+                        else:
+                            conversion_success = False
+                            error_message = "LaTeX compilation failed."
+                    except subprocess.CalledProcessError as e:
                         conversion_success = False
-                        error_message = result.stderr or "LaTeX compilation failed."
+                        error_message = e.stderr or e.stdout
 
                 # --- IPYNB Conversion ---
                 elif file_extension == ".ipynb":
