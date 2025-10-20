@@ -477,8 +477,57 @@ elif action == "Convert to PDF":
                     py_content = uploaded_file.getvalue().decode("utf-8")
                     py_content = textwrap.dedent(py_content).strip()
                     
-                    # Get the original filename
+                    # Get the original filename and escape for LaTeX
                     filename = uploaded_file.name
+                    # Escape special characters for display in texttt
+                    def escape_filename(name):
+                        replacements = {
+                            '\\': '\\textbackslash{}',
+                            '{': '\\{',
+                            '}': '\\}',
+                            '_': '\\_',
+                            '
+                    
+                    tex_path = os.path.join(temp_dir, "py_file.tex")
+                    with open(tex_path, "w", encoding="utf-8") as f:
+                        f.write(latex_template)
+                    
+                    cmd_xelatex = ["xelatex", "-shell-escape", "-interaction=batchmode", tex_path]
+                    result = subprocess.run(cmd_xelatex, cwd=temp_dir, capture_output=True, text=True, timeout=120)
+                    
+                    pdf_file = os.path.join(temp_dir, "py_file.pdf")
+                    if os.path.exists(pdf_file):
+                        os.rename(pdf_file, output_path)
+                        conversion_success = True
+                    else:
+                        conversion_success = False
+                        error_message = result.stderr or "LaTeX compilation failed.": '\\
+                    
+                    tex_path = os.path.join(temp_dir, "py_file.tex")
+                    with open(tex_path, "w", encoding="utf-8") as f:
+                        f.write(latex_template)
+                    
+                    cmd_xelatex = ["xelatex", "-shell-escape", "-interaction=batchmode", tex_path]
+                    result = subprocess.run(cmd_xelatex, cwd=temp_dir, capture_output=True, text=True, timeout=120)
+                    
+                    pdf_file = os.path.join(temp_dir, "py_file.pdf")
+                    if os.path.exists(pdf_file):
+                        os.rename(pdf_file, output_path)
+                        conversion_success = True
+                    else:
+                        conversion_success = False
+                        error_message = result.stderr or "LaTeX compilation failed.",
+                            '&': '\\&',
+                            '%': '\\%',
+                            '#': '\\#',
+                            '~': '\\textasciitilde{}',
+                            '^': '\\textasciicircum{}'
+                        }
+                        for char, repl in replacements.items():
+                            name = name.replace(char, repl)
+                        return name
+                    
+                    filename_safe = escape_filename(filename)
                     
                     latex_template = fr"""
                 \documentclass[12pt,a4paper]{{article}}
@@ -490,12 +539,12 @@ elif action == "Convert to PDF":
                 \setlength{{\parskip}}{{0pt}}
 
                 \begin{{document}}
-                % Filename as title
                 \noindent
-                {{\Large\textbf{{\texttt{{{filename}}}}}}}
+                {{\Large\textbf{{\ttfamily {filename_safe}}}}}
+
                 \vspace{{0.3cm}}
 
-                \noindent
+                \noindent\hspace{{-\leftmargin}}%
                 \begin{{minted}}[
                 breaklines,
                 breakanywhere,
