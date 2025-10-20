@@ -398,7 +398,7 @@ elif action == "Rotate":
 elif action == "Convert to PDF":
     st.header("Convert Files to PDF")
     st.write("Convert text and document files (txt, docx, html, py, ipynb) into a PDF document.")
-    
+
     uploaded_file = st.file_uploader(
         "Upload File", 
         type=["txt", "doc", "docx", "odt", "ipynb", "py", "html"], 
@@ -413,208 +413,158 @@ elif action == "Convert to PDF":
             input_path = os.path.join(temp_dir, f"input{file_extension}")
             output_path = os.path.join(temp_dir, "output.pdf")
             
-            # Save the uploaded file to a temporary location
+            # Save uploaded file
             with open(input_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
-
+            
+            status_container = st.empty()
+            status_container.markdown("""
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <img src="https://cdn.pixabay.com/animation/2023/08/11/21/18/21-18-05-265_256.gif" width="30">
+                    <h3 style="margin: 0;">Converting file... Please wait</h3>
+                </div>
+            """, unsafe_allow_html=True)
+            
             try:
-                status_container = st.empty()
-                status_container.markdown("""
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <img src="https://cdn.pixabay.com/animation/2023/08/11/21/18/21-18-05-265_256.gif" width="30">
-                        <h3 style="margin: 0;">Converting file... Please wait</h3>
-                    </div>
-                """, unsafe_allow_html=True)
-                
                 conversion_success = False
                 error_message = ""
-                
-                # --- Conversion Logic ---
-                
-                # Files converted via Pandoc -> HTML -> wkhtmltopdf
-                if file_extension in [".txt", ".py", ".doc", ".docx", ".odt"]:
+
+                # --- TXT Conversion ---
+                if file_extension == ".txt":
+                    from reportlab.pdfgen import canvas
+                    from reportlab.lib.pagesizes import letter
+                    from reportlab.lib.units import inch
+
+                    with open(input_path, "r", encoding="utf-8") as f:
+                        text = f.read()
                     
-                    # 1. Convert source file to intermediate HTML using pandoc
-                    html_path = os.path.join(temp_dir, "temp_output.html")
+                    c = canvas.Canvas(output_path, pagesize=letter)
+                    width, height = letter
+                    margin = 0.75 * inch  # 0.75 inch margins all around
+                    y = height - margin
+                    c.setFont("Courier", 10)
                     
-                   # --- TXT and PY Conversion ---
-                    if file_extension in [".txt", ".py"]:
-                        status_container = st.empty()
-                        status_container.markdown("""
-                            <div style="display: flex; align-items: center; gap: 15px;">
-                                <img src="https://cdn.pixabay.com/animation/2023/08/11/21/18/21-18-05-265_256.gif" width="30">
-                                <h3 style="margin: 0;">Converting file... Please wait</h3>
-                            </div>
-                        """, unsafe_allow_html=True)
+                    for line in text.split("\n"):
+                        # wrap lines if too long
+                        while len(line) > 0:
+                            c.drawString(margin, y, line[:95])
+                            line = line[95:]
+                            y -= 12
+                            if y < margin:
+                                c.showPage()
+                                y = height - margin
+                                c.setFont("Courier", 10)
+                    c.save()
+                    conversion_success = True
 
-                        with tempfile.TemporaryDirectory() as temp_dir:
-                            try:
-                                # Save uploaded content
-                                content_path = os.path.join(temp_dir, f"input{file_extension}")
-                                with open(content_path, "wb") as f:
-                                    f.write(uploaded_file.getbuffer())
+                # --- PY Conversion (with syntax highlighting) ---
+                elif file_extension == ".py":
+                    py_content = uploaded_file.getvalue().decode("utf-8")
+                    latex_template = fr"""
+\documentclass[12pt,a4paper]{{article}}
+\usepackage[margin=1in]{{geometry}}
+\usepackage{{minted}}
+\usepackage{{xcolor}}
+\usepackage{{fancyhdr}}
+\usepackage{{titlesec}}
+\pagestyle{{fancy}}
+\fancyhf{{}}
+\lhead{{{original_name}}}
+\rhead{{}}
+\renewcommand{{\headrulewidth}}{{0.4pt}}
+\title{{{original_name}}}
+\begin{{document}}
+\begin{{minted}}[breaklines,fontsize=\small,linenos]{{python}}
+{py_content}
+\end{{minted}}
+\end{{document}}
+"""
+                    tex_path = os.path.join(temp_dir, "py_file.tex")
+                    with open(tex_path, "w", encoding="utf-8") as f:
+                        f.write(latex_template)
+                    
+                    # Compile LaTeX with xelatex and minted
+                    cmd_xelatex = ["xelatex", "-shell-escape", "-interaction=batchmode", tex_path]
+                    result = subprocess.run(cmd_xelatex, cwd=temp_dir, capture_output=True, text=True, timeout=120)
+                    pdf_file = os.path.join(temp_dir, "py_file.pdf")
+                    if os.path.exists(pdf_file):
+                        os.rename(pdf_file, output_path)
+                        conversion_success = True
+                    else:
+                        conversion_success = False
+                        error_message = result.stderr or "LaTeX compilation failed."
 
-                                output_pdf_path = os.path.join(temp_dir, f"{original_name}.pdf")
-
-                                # Create markdown input for Pandoc
-                                if file_extension == ".py":
-                                    # Wrap python code in fenced code block for syntax highlighting
-                                    md_path = os.path.join(temp_dir, "input.md")
-                                    with open(content_path, "r", encoding="utf-8") as f:
-                                        code_content = f.read()
-                                    md_content = f"```python\n{code_content}\n```"
-                                    with open(md_path, "w", encoding="utf-8") as f:
-                                        f.write(md_content)
-                                    pandoc_input = md_path
-
-                                    # Pandoc command with Python highlighting (pygments)
-                                    cmd_pandoc = [
-                                        "pandoc", pandoc_input,
-                                        "-o", output_pdf_path,
-                                        "--pdf-engine=xelatex",
-                                        "--metadata", f"title:{original_name}",
-                                        "--highlight-style=pygments",
-                                        "-V", "geometry:top=25mm,bottom=25mm,left=25mm,right=25mm"
-                                    ]
-
-                                else:  # .txt file
-                                    # Simple Markdown with file content
-                                    md_path = os.path.join(temp_dir, "input.md")
-                                    with open(content_path, "r", encoding="utf-8") as f:
-                                        text_content = f.read()
-                                    md_content = f"# {original_name}\n\n{text_content}"
-                                    with open(md_path, "w", encoding="utf-8") as f:
-                                        f.write(md_content)
-                                    pandoc_input = md_path
-
-                                    cmd_pandoc = [
-                                        "pandoc", pandoc_input,
-                                        "-o", output_pdf_path,
-                                        "--pdf-engine=xelatex",
-                                        "--metadata", f"title:{original_name}",
-                                        "-V", "geometry:top=25mm,bottom=25mm,left=25mm,right=25mm"
-                                    ]
-
-                                # Run Pandoc
-                                result = subprocess.run(cmd_pandoc, capture_output=True, text=True, timeout=120)
-                                status_container.empty()
-
-                                if result.returncode == 0 and os.path.exists(output_pdf_path):
-                                    st.success(f"✅ {file_extension[1:].upper()} converted to PDF successfully!")
-                                    converted_size = os.path.getsize(output_pdf_path) / (1024 * 1024)
-                                    st.metric("Output Size", f"{converted_size:.2f} MB")
-
-                                    with open(output_pdf_path, "rb") as f:
-                                        st.download_button(
-                                            label="📥 Download PDF",
-                                            data=f.read(),
-                                            file_name=f"{original_name}.pdf",
-                                            mime="application/pdf"
-                                        )
-                                else:
-                                    st.error(f"❌ Conversion failed. Check that `pandoc` and `xelatex` are installed.")
-                                    st.info(f"Error details: {result.stderr}")
-
-                            except Exception as e:
-                                status_container.empty()
-                                st.error(f"❌ Critical Error during conversion: {e}")
-
-
-                
-                
-                elif file_extension == ".html":
-                    # HTML to PDF directly using wkhtmltopdf
-                    cmd = ["wkhtmltopdf", "--quiet", input_path, output_path]
-                    conversion_success, error_message = run_subprocess(cmd, input_path, output_path)
-
-                
+                # --- IPYNB Conversion ---
                 elif file_extension == ".ipynb":
-                    
-                    # 1. Use nbconvert to convert ipynb to LaTeX
                     latex_output_name = "notebook_output.tex"
                     latex_output_path = os.path.join(temp_dir, latex_output_name)
-                    
-                    try:
-                        import json
-                        with open(input_path, "r", encoding="utf-8") as f:
-                            notebook_json = json.load(f)
-
-                        # Set title metadata to the original filename
-                        notebook_json.setdefault("metadata", {})["title"] = original_name
-
-                        with open(input_path, "w", encoding="utf-8") as f:
-                            json.dump(notebook_json, f)
-
-                        # Command for LaTeX generation (using the system default template)
-                        cmd_nbconvert = [
-                            "jupyter-nbconvert", "--to", "latex", 
-                            input_path, 
-                            "--output", latex_output_name, 
-                            # FIX: Removed the "--template" argument to rely on internal default
-                            "--output-dir", temp_dir 
-                        ]
-                        
-                        st.info("Attempting conversion using the high-quality **LaTeX pipeline** (nbconvert -> LaTeX -> PDF)...")
-                        
-                        # Run nbconvert to IPYNB -> LaTeX.
-                        result_nbconvert = subprocess.run(cmd_nbconvert, capture_output=True, text=True, timeout=120)
-                        
-                        if result_nbconvert.returncode == 0 and os.path.exists(latex_output_path):
-                            
-                            # 2. Compile the LaTeX file to PDF using xelatex
-                            xelatex_cmd = ["xelatex", "--interaction=batchmode", latex_output_name]
-                            
-                            st.info("Compiling LaTeX to PDF...")
-                            
-                            # First run (for auxiliary files, TOC, etc.)
-                            subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120) 
-                            # Second run (to resolve references/TOC)
-                            result_xelatex = subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120) 
-                            
-                            final_pdf_name = Path(latex_output_name).stem + ".pdf" 
-                            final_pdf_path_temp = os.path.join(temp_dir, final_pdf_name)
-                            
-                            if os.path.exists(final_pdf_path_temp):
-                                # Rename output file to 'output.pdf' 
-                                os.rename(final_pdf_path_temp, output_path)
-                                conversion_success = True
-                            else:
-                                conversion_success = False
-                                # Provides detailed error about LaTeX compilation failure
-                                error_message = (
-                                    f"LaTeX compilation failed. Ensure the notebook content is valid for TeX and that all "
-                                    f"LaTeX dependencies are installed (xelatex, texlive packages). "
-                                    f"Error Details: {result_xelatex.stderr or result_xelatex.stdout}"
-                                )
+                    cmd_nbconvert = [
+                        "jupyter-nbconvert", "--to", "latex", 
+                        input_path, 
+                        "--output", latex_output_name, 
+                        "--output-dir", temp_dir 
+                    ]
+                    result_nb = subprocess.run(cmd_nbconvert, capture_output=True, text=True, timeout=120)
+                    if result_nb.returncode == 0 and os.path.exists(latex_output_path):
+                        # Compile LaTeX to PDF
+                        xelatex_cmd = ["xelatex", "--interaction=batchmode", latex_output_name]
+                        subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120)
+                        subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120)
+                        final_pdf_name = Path(latex_output_name).stem + ".pdf"
+                        final_pdf_path_temp = os.path.join(temp_dir, final_pdf_name)
+                        if os.path.exists(final_pdf_path_temp):
+                            os.rename(final_pdf_path_temp, output_path)
+                            conversion_success = True
                         else:
-                            error_message = f"Jupyter Notebook conversion to LaTeX failed: {result_nbconvert.stderr}"
-                            
-                    except ImportError:
-                         error_message = "Python package 'nbconvert' not found. Please install it."
-                    except Exception as e:
-                        error_message = f"Notebook conversion error: {e}"
+                            conversion_success = False
+                            error_message = "IPYNB LaTeX compilation failed."
+                    else:
+                        error_message = "IPYNB to LaTeX conversion failed."
 
+                # --- DOC/DOCX/ODT Conversion ---
+                elif file_extension in [".doc", ".docx", ".odt"]:
+                    html_path = os.path.join(temp_dir, "temp.html")
+                    cmd_pandoc = ["pandoc", input_path, "-o", html_path, "--standalone"]
+                    result_html = subprocess.run(cmd_pandoc, capture_output=True, text=True, timeout=60)
+                    if result_html.returncode == 0:
+                        cmd_pdf = ["wkhtmltopdf", "--quiet", html_path, output_path]
+                        result_pdf = subprocess.run(cmd_pdf, capture_output=True, text=True, timeout=60)
+                        if result_pdf.returncode == 0 and os.path.exists(output_path):
+                            conversion_success = True
+                        else:
+                            conversion_success = False
+                            error_message = "DOCX -> PDF conversion failed."
+                    else:
+                        conversion_success = False
+                        error_message = "Pandoc conversion to HTML failed."
 
-                # --- Final Result Display ---
+                # --- HTML Conversion ---
+                elif file_extension == ".html":
+                    cmd_pdf = ["wkhtmltopdf", "--quiet", input_path, output_path]
+                    result_pdf = subprocess.run(cmd_pdf, capture_output=True, text=True, timeout=60)
+                    if result_pdf.returncode == 0 and os.path.exists(output_path):
+                        conversion_success = True
+                    else:
+                        conversion_success = False
+                        error_message = "HTML -> PDF conversion failed."
+
+                # --- Final Result ---
                 status_container.empty()
-                if conversion_success:
-                    st.success("✅ File converted to PDF successfully!")
-                    
+                if conversion_success and os.path.exists(output_path):
+                    st.success(f"✅ {file_extension[1:].upper()} converted to PDF successfully!")
                     converted_size = os.path.getsize(output_path) / (1024 * 1024)
                     st.metric("Output Size", f"{converted_size:.2f} MB")
-                    
-                    output_filename = f"{original_name}.pdf"
                     with open(output_path, "rb") as f:
                         st.download_button(
-                            label="📥 Download Converted PDF",
+                            label="📥 Download PDF",
                             data=f.read(),
-                            file_name=output_filename,
+                            file_name=f"{original_name}.pdf",
                             mime="application/pdf"
                         )
-
                 else:
-                    st.error(f"❌ Conversion failed. Error: {error_message}")
-                    st.info("Conversion relies on external system tools (`pandoc`, `wkhtmltopdf`, `xelatex`) that must be listed in a `packages.txt` file for deployment. Please verify your dependencies.")
-                    
+                    st.error(f"❌ Conversion failed: {error_message}")
+
             except Exception as e:
-                st.error(f"❌ Critical Error during conversion: {e}")
+                status_container.empty()
+                st.error(f"❌ Critical Error: {e}")
+
