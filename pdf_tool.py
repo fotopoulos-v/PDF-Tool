@@ -485,7 +485,8 @@ elif action == "Convert to PDF":
                             "jupyter-nbconvert", "--to", "latex", 
                             input_path, 
                             "--output", latex_output_name, 
-                            # FIX: Add --no-prompt to remove 'In [ ]:' and 'Out [ ]:' labels/text
+                            # FIX: Use --no-input to remove all source code blocks and the associated "Input" label.
+                            "--no-input", 
                             "--no-prompt", 
                             "--output-dir", temp_dir 
                         ]
@@ -548,7 +549,7 @@ elif action == "Convert to PDF":
                             mime="application/pdf"
                         )
                     if file_extension == ".ipynb":
-                         st.info("The notebook was rendered using the **LaTeX pipeline**. This provides much better control over typography, mathematics, and complex outputs like wide tables, ensuring a clean A4 output without clipped or overly wrapped content.")
+                         st.info("The notebook was rendered using the **LaTeX pipeline**. Note that the **source code (inputs) were removed** to ensure a clean, report-style PDF free of the 'Input' label. Markdown and code outputs are retained.")
                 else:
                     st.error(f"❌ Conversion failed. Error: {error_message}")
                     st.info("Conversion relies on external system tools (`pandoc`, `wkhtmltopdf`, `xelatex`) that must be listed in a `packages.txt` file for deployment. Please verify your dependencies.")
