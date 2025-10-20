@@ -477,6 +477,9 @@ elif action == "Convert to PDF":
                     py_content = uploaded_file.getvalue().decode("utf-8")
                     py_content = textwrap.dedent(py_content).strip()
                     
+                    # Get the original filename
+                    filename = uploaded_file.name
+                    
                     latex_template = fr"""
                 \documentclass[12pt,a4paper]{{article}}
                 \usepackage[margin=1in]{{geometry}}
@@ -487,9 +490,12 @@ elif action == "Convert to PDF":
                 \setlength{{\parskip}}{{0pt}}
 
                 \begin{{document}}
-                \begingroup
-                \setlength{{\leftskip}}{{0pt}}
-                \setlength{{\rightskip}}{{0pt}}
+                % Filename as title
+                \noindent
+                {{\Large\textbf{{\texttt{{{filename}}}}}}}
+                \vspace{{0.3cm}}
+
+                \noindent
                 \begin{{minted}}[
                 breaklines,
                 breakanywhere,
@@ -500,7 +506,6 @@ elif action == "Convert to PDF":
                 ]{{python}}
                 {py_content}
                 \end{{minted}}
-                \endgroup
                 \end{{document}}
                 """
                     
