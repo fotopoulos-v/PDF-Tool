@@ -546,6 +546,75 @@ elif action == "Convert to PDF":
                         conversion_success = False
                         error_message = "HTML -> PDF conversion failed."
 
+
+                # --- ipynb Conversion ---
+                elif file_extension == ".ipynb":
+                    
+                    # 1. Use nbconvert to convert ipynb to LaTeX
+                    latex_output_name = "notebook_output.tex"
+                    latex_output_path = os.path.join(temp_dir, latex_output_name)
+                    
+                    try:
+                        import json
+                        with open(input_path, "r", encoding="utf-8") as f:
+                            notebook_json = json.load(f)
+
+                        # Set title metadata to the original filename
+                        notebook_json.setdefault("metadata", {})["title"] = original_name
+
+                        with open(input_path, "w", encoding="utf-8") as f:
+                            json.dump(notebook_json, f)
+
+                        # Command for LaTeX generation (using the system default template)
+                        cmd_nbconvert = [
+                            "jupyter-nbconvert", "--to", "latex", 
+                            input_path, 
+                            "--output", latex_output_name, 
+                            # FIX: Removed the "--template" argument to rely on internal default
+                            "--output-dir", temp_dir 
+                        ]
+                        
+                        st.info("Attempting conversion using the high-quality **LaTeX pipeline** (nbconvert -> LaTeX -> PDF)...")
+                        
+                        # Run nbconvert to IPYNB -> LaTeX.
+                        result_nbconvert = subprocess.run(cmd_nbconvert, capture_output=True, text=True, timeout=120)
+                        
+                        if result_nbconvert.returncode == 0 and os.path.exists(latex_output_path):
+                            
+                            # 2. Compile the LaTeX file to PDF using xelatex
+                            xelatex_cmd = ["xelatex", "--interaction=batchmode", latex_output_name]
+                            
+                            st.info("Compiling LaTeX to PDF...")
+                            
+                            # First run (for auxiliary files, TOC, etc.)
+                            subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120) 
+                            # Second run (to resolve references/TOC)
+                            result_xelatex = subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120) 
+                            
+                            final_pdf_name = Path(latex_output_name).stem + ".pdf" 
+                            final_pdf_path_temp = os.path.join(temp_dir, final_pdf_name)
+                            
+                            if os.path.exists(final_pdf_path_temp):
+                                # Rename output file to 'output.pdf' 
+                                os.rename(final_pdf_path_temp, output_path)
+                                conversion_success = True
+                            else:
+                                conversion_success = False
+                                # Provides detailed error about LaTeX compilation failure
+                                error_message = (
+                                    f"LaTeX compilation failed. Ensure the notebook content is valid for TeX and that all "
+                                    f"LaTeX dependencies are installed (xelatex, texlive packages). "
+                                    f"Error Details: {result_xelatex.stderr or result_xelatex.stdout}"
+                                )
+                        else:
+                            error_message = f"Jupyter Notebook conversion to LaTeX failed: {result_nbconvert.stderr}"
+                            
+                    except ImportError:
+                         error_message = "Python package 'nbconvert' not found. Please install it."
+                    except Exception as e:
+                        error_message = f"Notebook conversion error: {e}"
+
+
                 # --- Final Result ---
                 status_container.empty()
                 if conversion_success and os.path.exists(output_path):
