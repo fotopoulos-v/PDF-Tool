@@ -477,6 +477,9 @@ elif action == "Convert to PDF":
                     py_content = uploaded_file.getvalue().decode("utf-8")
                     py_content = textwrap.dedent(py_content).strip()
                     
+                    # Add a blank line at the beginning to fix alignment
+                    py_content = "\n" + py_content
+                    
                     latex_template = fr"""
                 \documentclass[12pt,a4paper]{{article}}
                 \usepackage[margin=1in]{{geometry}}
