@@ -471,58 +471,38 @@ elif action == "Convert to PDF":
                     c.save()
                     conversion_success = True
 
-                # --- PY Conversion (with syntax highlighting) ---
+                # --- PY Conversion (syntax highlighting only, no title) ---
                 elif file_extension == ".py":
                     import textwrap
                     
                     py_content = uploaded_file.getvalue().decode("utf-8")
                     py_content = textwrap.dedent(py_content).strip()
                     
-                    def escape_latex_title(filename: str) -> str:
-                        """Escape LaTeX special characters in filenames."""
-                        specials = {
-                            '\\': '\\textbackslash{}',
-                            '{': '\\{',
-                            '}': '\\}',
-                            '$': '\\$',
-                            '&': '\\&',
-                            '%': '\\%',
-                            '#': '\\#',
-                            '_': '\\_',
-                            '~': '\\textasciitilde{}',
-                            '^': '\\textasciicircum{}',
-                        }
-                        result = filename
-                        for char, replacement in specials.items():
-                            result = result.replace(char, replacement)
-                        return result
-                    
-                    title_safe = escape_latex_title(original_name)
-                    
                     latex_template = fr"""
-\documentclass[12pt,a4paper]{{article}}
-\usepackage[margin=1in]{{geometry}}
-\usepackage{{minted}}
-\usepackage{{xcolor}}
-\usepackage{{fancyhdr}}
-\usepackage{{titlesec}}
-\pagestyle{{plain}}
-\titlespacing*{{\section}}{{0pt}}{{0pt}}{{0pt}}
-\begin{{document}}
-\begin{{center}}
-\Large \textbf{{\ttfamily {title_safe}}}
-\end{{center}}
-\vspace{{0.5cm}}
-\begin{{minted}}[
-breaklines,
-breakanywhere,
-fontsize=\small
-]{{python}}
-{py_content}
-\end{{minted}}
-\end{{document}}
-"""
-                    
+                \documentclass[12pt,a4paper]{{article}}
+                \usepackage[margin=1in]{{geometry}}
+                \usepackage{{minted}}
+                \usepackage{{xcolor}}
+                \usepackage{{fancyhdr}}
+                \usepackage{{titlesec}}
+
+                \pagestyle{{plain}}
+                \titlespacing*{{\section}}{{0pt}}{{0pt}}{{0pt}}
+
+                \begin{{document}}
+
+                % Python code with syntax highlighting only (no title)
+                \begin{{minted}}[
+                    breaklines,
+                    breakanywhere,
+                    fontsize=\small
+                ]{{python}}
+                {py_content}
+                \end{{minted}}
+
+                \end{{document}}
+                """
+
                     tex_path = os.path.join(temp_dir, "py_file.tex")
                     with open(tex_path, "w", encoding="utf-8") as f:
                         f.write(latex_template)
@@ -537,6 +517,7 @@ fontsize=\small
                     else:
                         conversion_success = False
                         error_message = result.stderr or "LaTeX compilation failed."
+
 
                 # --- DOC/DOCX/ODT Conversion ---
                 elif file_extension in [".doc", ".docx", ".odt"]:
