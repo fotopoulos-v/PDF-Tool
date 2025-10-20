@@ -482,25 +482,34 @@ elif action == "Convert to PDF":
                 \usepackage[margin=1in]{{geometry}}
                 \usepackage{{minted}}
                 \usepackage{{xcolor}}
+                \usepackage{{fvextra}}
                 \pagestyle{{empty}}
                 \setlength{{\parindent}}{{0pt}}
                 \setlength{{\parskip}}{{0pt}}
+                \setlength{{\topskip}}{{0pt}}
+                \setlength{{\headheight}}{{0pt}}
+                \setlength{{\headsep}}{{0pt}}
+                \setlength{{\footskip}}{{0pt}}
 
                 \begin{{document}}
-                \begingroup
-                \setlength{{\leftskip}}{{0pt}}
-                \setlength{{\rightskip}}{{0pt}}
+                \vspace*{{-\topmargin}}
+                \vspace*{{-\headheight}}
+                \vspace*{{-\headsep}}
+                \vspace*{{0pt}}
                 \begin{{minted}}[
                 breaklines,
                 breakanywhere,
                 fontsize=\small,
-                xleftmargin=0pt,
-                resetmargins=true,
-                gobble=0
+                framesep=0pt,           % Remove frame spacing
+                xleftmargin=0pt,        % No left margin
+                xrightmargin=0pt,       % No right margin
+                resetmargins=true,      % Reset all margins
+                gobble=0,               # No line gobbling
+                rulecolor=,             # No frame rules
+                framerule=0pt           # No frame rules
                 ]{{python}}
                 {py_content}
                 \end{{minted}}
-                \endgroup
                 \end{{document}}
                 """
                     
