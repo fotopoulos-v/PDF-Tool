@@ -479,30 +479,27 @@ elif action == "Convert to PDF":
                     
                     latex_template = fr"""
                 \documentclass[12pt,a4paper]{{article}}
-                \usepackage[margin=1in]{{geometry}}
+                \usepackage[margin=1in,left=1in]{{geometry}}
                 \usepackage{{minted}}
                 \usepackage{{xcolor}}
                 \pagestyle{{empty}}
                 \setlength{{\parindent}}{{0pt}}
                 \setlength{{\parskip}}{{0pt}}
 
-                % Force minted to have no left margin or padding
-                \setlength{{\fboxsep}}{{0pt}}
-
                 \begin{{document}}
-                % Add invisible title to reset layout
-                \mbox{{}}
-                \vspace{{-\baselineskip}}
-
+                \hspace*{{-\leftskip}}%
+                \begin{{minipage}}{{\textwidth}}
                 \begin{{minted}}[
                 breaklines,
                 breakanywhere,
                 fontsize=\small,
                 xleftmargin=0pt,
-                resetmargins=true
+                resetmargins=true,
+                linenos=false
                 ]{{python}}
                 {py_content}
                 \end{{minted}}
+                \end{{minipage}}
                 \end{{document}}
                 """
                     
