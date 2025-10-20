@@ -429,11 +429,12 @@ elif action == "Convert to PDF":
                 conversion_success = False
                 error_message = ""
 
-                # --- TXT Conversion ---
+                # --- TXT Conversion (fixed line wrapping) ---
                 if file_extension == ".txt":
                     from reportlab.pdfgen import canvas
                     from reportlab.lib.pagesizes import letter
                     from reportlab.lib.units import inch
+                    import textwrap
 
                     with open(input_path, "r", encoding="utf-8") as f:
                         text = f.read()
@@ -441,13 +442,18 @@ elif action == "Convert to PDF":
                     c = canvas.Canvas(output_path, pagesize=letter)
                     width, height = letter
                     margin = 0.75 * inch
+                    usable_width = width - 2 * margin  # total printable width
                     y = height - margin
                     c.setFont("Courier", 10)
                     
+                    # Estimate average character width (Courier is monospaced)
+                    char_width = c.stringWidth("A", "Courier", 10)
+                    max_chars = int(usable_width / char_width)
+                    
                     for line in text.split("\n"):
-                        while len(line) > 0:
-                            c.drawString(margin, y, line[:95])
-                            line = line[95:]
+                        wrapped_lines = textwrap.wrap(line, width=max_chars)
+                        for wrapped_line in wrapped_lines:
+                            c.drawString(margin, y, wrapped_line)
                             y -= 12
                             if y < margin:
                                 c.showPage()
