@@ -549,13 +549,36 @@ elif action == "Convert to PDF":
 
                 # --- HTML Conversion ---
                 elif file_extension == ".html":
-                    cmd_pdf = ["wkhtmltopdf", "--quiet", input_path, output_path]
-                    result_pdf = subprocess.run(cmd_pdf, capture_output=True, text=True, timeout=60)
-                    if result_pdf.returncode == 0 and os.path.exists(output_path):
-                        conversion_success = True
-                    else:
+                    import shutil
+
+                    wkhtml_path = shutil.which("wkhtmltopdf")
+                    if not wkhtml_path:
+                        st.error("❌ wkhtmltopdf not found. Make sure it's installed and listed in packages.txt.")
                         conversion_success = False
-                        error_message = "HTML -> PDF conversion failed."
+                    else:
+                        cmd_pdf = [
+                            wkhtml_path,
+                            "--margin-top", "10mm",
+                            "--margin-bottom", "10mm",
+                            "--margin-left", "10mm",
+                            "--margin-right", "10mm",
+                            "--quiet",
+                            input_path,
+                            output_path
+                        ]
+                        try:
+                            result_pdf = subprocess.run(cmd_pdf, capture_output=True, text=True, timeout=60)
+                            if result_pdf.returncode == 0 and os.path.exists(output_path):
+                                conversion_success = True
+                            else:
+                                conversion_success = False
+                                error_message = (
+                                    "HTML → PDF conversion failed.\n"
+                                    f"stdout: {result_pdf.stdout}\nstderr: {result_pdf.stderr}"
+                                )
+                        except Exception as e:
+                            conversion_success = False
+                            error_message = f"HTML → PDF conversion exception: {e}"
 
 
                 # --- ipynb Conversion ---
