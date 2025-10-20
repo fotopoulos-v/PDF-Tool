@@ -463,10 +463,26 @@ elif action == "Convert to PDF":
 
                     # Escape only LaTeX special characters except dash '-'
                     def escape_latex_title(filename: str) -> str:
-                        specials = ['&', '%', '$', '#', '_', '{', '}', '~', '^', '\\']
-                        for s in specials:
-                            filename = filename.replace(s, f"\\{s}")
-                        return filename
+                        """Escape LaTeX special characters in filenames for use as titles."""
+                        specials = {
+                            '\\': '\\textbackslash{}',
+                            '{': '\\{',
+                            '}': '\\}',
+                            '$': '\\$',
+                            '&': '\\&',
+                            '%': '\\%',
+                            '#': '\\#',
+                            '_': '\\_',
+                            '~': '\\textasciitilde{}',
+                            '^': '\\textasciicircum{}',
+                            '-': '{-}',  # Wrap hyphen in braces to prevent ligatures
+                        }
+                        
+                        result = filename
+                        for char, replacement in specials.items():
+                            result = result.replace(char, replacement)
+                        
+                        return result
 
                     title_safe = escape_latex_title(original_name)
 
