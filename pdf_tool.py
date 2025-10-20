@@ -482,7 +482,7 @@ elif action == "Convert to PDF":
 
                     latex_template = fr"""
                 \documentclass[12pt,a4paper]{{article}}
-                \usepackage[top=0.6in,bottom=0.5in,left=0.65in,right=0.65in]{{geometry}}  % balanced layout
+                \usepackage[top=0.6in,bottom=0.5in,left=0.68in,right=0.68in]{{geometry}}  % balanced layout
                 \usepackage{{minted}}
                 \usepackage{{xcolor}}
                 \usepackage{{fvextra}}
@@ -493,7 +493,7 @@ elif action == "Convert to PDF":
                 \setlength{{\textheight}}{{730pt}}  % extend text area to near bottom
 
                 \begin{{document}}
-                \vspace*{{-0.4cm}}  % small breathing space at top
+                \vspace*{{-0.8cm}}  % small breathing space at top
                 \begin{{minted}}[
                     breaklines,
                     breakanywhere,
