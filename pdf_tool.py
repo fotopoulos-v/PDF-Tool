@@ -471,10 +471,9 @@ elif action == "Convert to PDF":
                     c.save()
                     conversion_success = True
 
-                # --- PY Conversion (syntax highlighting only, no title, truly left-aligned) ---
+               # --- PY Conversion (syntax highlighting only, no title, truly left-aligned) ---
                 elif file_extension == ".py":
                     import textwrap
-                    
                     py_content = uploaded_file.getvalue().decode("utf-8")
                     py_content = textwrap.dedent(py_content).strip()
                     
@@ -485,31 +484,29 @@ elif action == "Convert to PDF":
                 \usepackage{{xcolor}}
                 \usepackage{{fancyhdr}}
                 \usepackage{{titlesec}}
-
-                \pagestyle{{empty}} % no headers or footers
+                \pagestyle{{empty}}
                 \titlespacing*{{\section}}{{0pt}}{{0pt}}{{0pt}}
-
-                \setlength{{\parindent}}{{0pt}} % no paragraph indentation
-                \setlength{{\parskip}}{{0pt}} % no extra spacing between paragraphs
+                \setlength{{\parindent}}{{0pt}}
+                \setlength{{\parskip}}{{0pt}}
 
                 \begin{{document}}
-                \begin{{flushleft}} % ensure absolute left alignment
-
+                \noindent
                 \begin{{minted}}[
-                    breaklines,
-                    breakanywhere,
-                    fontsize=\small,
-                    xleftmargin=0pt,
-                    framesep=0pt,
-                    baselinestretch=1.1
+                breaklines,
+                breakanywhere,
+                fontsize=\small,
+                xleftmargin=0pt,
+                frame=none,
+                framesep=0pt,
+                numbersep=0pt,
+                baselinestretch=1.1,
+                autogobble=false
                 ]{{python}}
                 {py_content}
                 \end{{minted}}
-
-                \end{{flushleft}}
                 \end{{document}}
                 """
-
+                    
                     tex_path = os.path.join(temp_dir, "py_file.tex")
                     with open(tex_path, "w", encoding="utf-8") as f:
                         f.write(latex_template)
@@ -524,7 +521,6 @@ elif action == "Convert to PDF":
                     else:
                         conversion_success = False
                         error_message = result.stderr or "LaTeX compilation failed."
-
 
 
 
