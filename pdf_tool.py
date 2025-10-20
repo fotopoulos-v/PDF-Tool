@@ -479,7 +479,7 @@ elif action == "Convert to PDF":
                     
                     latex_template = fr"""
                 \documentclass[12pt,a4paper]{{article}}
-                \usepackage[margin=1in,left=1in]{{geometry}}
+                \usepackage[margin=1in]{{geometry}}
                 \usepackage{{minted}}
                 \usepackage{{xcolor}}
                 \pagestyle{{empty}}
@@ -487,19 +487,20 @@ elif action == "Convert to PDF":
                 \setlength{{\parskip}}{{0pt}}
 
                 \begin{{document}}
-                \hspace*{{-\leftskip}}%
-                \begin{{minipage}}{{\textwidth}}
+                \begingroup
+                \setlength{{\leftskip}}{{0pt}}
+                \setlength{{\rightskip}}{{0pt}}
                 \begin{{minted}}[
                 breaklines,
                 breakanywhere,
                 fontsize=\small,
                 xleftmargin=0pt,
                 resetmargins=true,
-                linenos=false
+                gobble=0
                 ]{{python}}
                 {py_content}
                 \end{{minted}}
-                \end{{minipage}}
+                \endgroup
                 \end{{document}}
                 """
                     
