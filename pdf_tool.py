@@ -437,39 +437,88 @@ elif action == "Convert to PDF":
                     # 1. Convert source file to intermediate HTML using pandoc
                     html_path = os.path.join(temp_dir, "temp_output.html")
                     
-                    # For TXT/PY, we wrap content in a Markdown block for pandoc to process nicely
+                   # --- TXT and PY Conversion ---
                     if file_extension in [".txt", ".py"]:
-                        content = uploaded_file.getvalue().decode('utf-8')
-                        md_input_path = os.path.join(temp_dir, "input.md")
-                        
-                        # --- Improved title and formatting ---
-                        if file_extension == ".py":
-                            md_content = f"# {original_name}\n\n```python\n{content}\n```"
-                        else:
-                            md_content = f"# {original_name}\n\n{content}"
-                        
-                        with open(md_input_path, "w", encoding="utf-8") as f:
-                            f.write(md_content)
-                            
-                        pandoc_input = md_input_path
-                    else:
-                        pandoc_input = input_path
+                        status_container = st.empty()
+                        status_container.markdown("""
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <img src="https://cdn.pixabay.com/animation/2023/08/11/21/18/21-18-05-265_256.gif" width="30">
+                                <h3 style="margin: 0;">Converting file... Please wait</h3>
+                            </div>
+                        """, unsafe_allow_html=True)
 
-                    # Pandoc command: input -> HTML
-                    cmd_pandoc = ["pandoc", pandoc_input, "-o", html_path, "--standalone"]
-                    success, error_message = run_subprocess(cmd_pandoc, pandoc_input, html_path)
+                        with tempfile.TemporaryDirectory() as temp_dir:
+                            try:
+                                # Save uploaded content
+                                content_path = os.path.join(temp_dir, f"input{file_extension}")
+                                with open(content_path, "wb") as f:
+                                    f.write(uploaded_file.getbuffer())
 
-                    if success:
-                        # --- Adjusted margins for nicer layout ---
-                        cmd_wkhtml = [
-                            "wkhtmltopdf", "--quiet",
-                            "--margin-top", "20mm",
-                            "--margin-bottom", "20mm",
-                            "--margin-left", "10mm",
-                            "--margin-right", "10mm",
-                            html_path, output_path
-                        ]
-                        conversion_success, error_message = run_subprocess(cmd_wkhtml, html_path, output_path)
+                                output_pdf_path = os.path.join(temp_dir, f"{original_name}.pdf")
+
+                                # Create markdown input for Pandoc
+                                if file_extension == ".py":
+                                    # Wrap python code in fenced code block for syntax highlighting
+                                    md_path = os.path.join(temp_dir, "input.md")
+                                    with open(content_path, "r", encoding="utf-8") as f:
+                                        code_content = f.read()
+                                    md_content = f"```python\n{code_content}\n```"
+                                    with open(md_path, "w", encoding="utf-8") as f:
+                                        f.write(md_content)
+                                    pandoc_input = md_path
+
+                                    # Pandoc command with Python highlighting (pygments)
+                                    cmd_pandoc = [
+                                        "pandoc", pandoc_input,
+                                        "-o", output_pdf_path,
+                                        "--pdf-engine=xelatex",
+                                        "--metadata", f"title:{original_name}",
+                                        "--highlight-style=pygments",
+                                        "-V", "geometry:top=25mm,bottom=25mm,left=25mm,right=25mm"
+                                    ]
+
+                                else:  # .txt file
+                                    # Simple Markdown with file content
+                                    md_path = os.path.join(temp_dir, "input.md")
+                                    with open(content_path, "r", encoding="utf-8") as f:
+                                        text_content = f.read()
+                                    md_content = f"# {original_name}\n\n{text_content}"
+                                    with open(md_path, "w", encoding="utf-8") as f:
+                                        f.write(md_content)
+                                    pandoc_input = md_path
+
+                                    cmd_pandoc = [
+                                        "pandoc", pandoc_input,
+                                        "-o", output_pdf_path,
+                                        "--pdf-engine=xelatex",
+                                        "--metadata", f"title:{original_name}",
+                                        "-V", "geometry:top=25mm,bottom=25mm,left=25mm,right=25mm"
+                                    ]
+
+                                # Run Pandoc
+                                result = subprocess.run(cmd_pandoc, capture_output=True, text=True, timeout=120)
+                                status_container.empty()
+
+                                if result.returncode == 0 and os.path.exists(output_pdf_path):
+                                    st.success(f"✅ {file_extension[1:].upper()} converted to PDF successfully!")
+                                    converted_size = os.path.getsize(output_pdf_path) / (1024 * 1024)
+                                    st.metric("Output Size", f"{converted_size:.2f} MB")
+
+                                    with open(output_pdf_path, "rb") as f:
+                                        st.download_button(
+                                            label="📥 Download PDF",
+                                            data=f.read(),
+                                            file_name=f"{original_name}.pdf",
+                                            mime="application/pdf"
+                                        )
+                                else:
+                                    st.error(f"❌ Conversion failed. Check that `pandoc` and `xelatex` are installed.")
+                                    st.info(f"Error details: {result.stderr}")
+
+                            except Exception as e:
+                                status_container.empty()
+                                st.error(f"❌ Critical Error during conversion: {e}")
+
 
                 
                 
