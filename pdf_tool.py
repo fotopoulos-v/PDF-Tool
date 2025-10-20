@@ -460,91 +460,64 @@ elif action == "Convert to PDF":
                 # --- PY Conversion (with syntax highlighting, fixed) ---
                 elif file_extension == ".py":
                     py_content = uploaded_file.getvalue().decode("utf-8")
-                    # Escape underscores and special LaTeX chars in filename
-                    import re
-                    # Escape LaTeX special characters, keep dash
-                    escaped_name = re.sub(r'([#%&$^_{}~\\])', r'\\\1', original_name)
-                    
+
+                    # Escape LaTeX special chars in filename, but keep dash '-' intact
+                    def escape_latex_title(filename: str) -> str:
+                        specials = ['&', '%', '$', '#', '_', '{', '}', '~', '^', '\\']
+                        for s in specials:
+                            filename = filename.replace(s, f"\\{s}")
+                        return filename
+
+                    title_safe = escape_latex_title(original_name)
+
                     latex_template = fr"""
-\documentclass[12pt,a4paper]{{article}}
-\usepackage[margin=2cm]{{geometry}}
-\usepackage{{minted}}
-\usepackage{{xcolor}}
-\usepackage{{fancyhdr}}
-\usepackage{{titlesec}}
+                \documentclass[12pt,a4paper]{{article}}
+                \usepackage[margin=1in]{{geometry}}
+                \usepackage{{minted}}
+                \usepackage{{xcolor}}
+                \usepackage{{fancyhdr}}
+                \usepackage{{titlesec}}
 
-% --- Header/footer removed for filename only on first page ---
-\pagestyle{{plain}}
+                % --- Header/footer removed for filename only on first page ---
+                \pagestyle{{plain}}
 
-% Optional: reduce spacing before code
-\titlespacing*{{\section}}{{0pt}}{{0pt}}{{0pt}}
+                % Optional: reduce spacing before code
+                \titlespacing*{{\section}}{{0pt}}{{0pt}}{{0pt}}
 
-\begin{{document}}
+                \begin{{document}}
 
-% Filename as first page heading only
-\begin{{center}}
-    \Large \textbf{{{escaped_name}}}
-\end{{center}}
-\vspace{{0.5cm}}
+                % Filename as first page heading
+                \begin{{center}}
+                    \Large \textbf{{{title_safe}}}
+                \end{{center}}
+                \vspace{{0.5cm}}
 
-% Python code with syntax highlighting, no line numbers, wrapped lines
-\begin{{minted}}[
-    breaklines,
-    breakanywhere,
-    fontsize=\small
-]{{python}}
-{py_content}
-\end{{minted}}
+                % Python code with syntax highlighting, no line numbers, wrapped lines
+                \begin{{minted}}[
+                    breaklines,
+                    breakanywhere,
+                    fontsize=\small
+                ]{{python}}
+                {py_content}
+                \end{{minted}}
 
-\end{{document}}
-"""
+                \end{{document}}
+                """
 
                     tex_path = os.path.join(temp_dir, "py_file.tex")
                     with open(tex_path, "w", encoding="utf-8") as f:
                         f.write(latex_template)
                     
                     # Compile LaTeX with xelatex and minted
-                    try:
-                        cmd_xelatex = ["xelatex", "-shell-escape", "-interaction=batchmode", tex_path]
-                        subprocess.run(cmd_xelatex, cwd=temp_dir, capture_output=True, text=True, timeout=120, check=True)
-                        subprocess.run(cmd_xelatex, cwd=temp_dir, capture_output=True, text=True, timeout=120, check=True)
-                        pdf_file = os.path.join(temp_dir, "py_file.pdf")
-                        if os.path.exists(pdf_file):
-                            os.rename(pdf_file, output_path)
-                            conversion_success = True
-                        else:
-                            conversion_success = False
-                            error_message = "LaTeX compilation failed."
-                    except subprocess.CalledProcessError as e:
-                        conversion_success = False
-                        error_message = e.stderr or e.stdout
-
-                # --- IPYNB Conversion ---
-                elif file_extension == ".ipynb":
-                    latex_output_name = "notebook_output.tex"
-                    latex_output_path = os.path.join(temp_dir, latex_output_name)
-                    cmd_nbconvert = [
-                        "jupyter-nbconvert", "--to", "latex", 
-                        input_path, 
-                        "--output", latex_output_name, 
-                        "--output-dir", temp_dir 
-                    ]
-                    result_nb = subprocess.run(cmd_nbconvert, capture_output=True, text=True, timeout=120)
-                    if result_nb.returncode == 0 and os.path.exists(latex_output_path):
-                        # Compile LaTeX to PDF
-                        xelatex_cmd = ["xelatex", "--interaction=batchmode", latex_output_name]
-                        subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120)
-                        subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120)
-                        final_pdf_name = Path(latex_output_name).stem + ".pdf"
-                        final_pdf_path_temp = os.path.join(temp_dir, final_pdf_name)
-                        if os.path.exists(final_pdf_path_temp):
-                            os.rename(final_pdf_path_temp, output_path)
-                            conversion_success = True
-                        else:
-                            conversion_success = False
-                            error_message = "IPYNB LaTeX compilation failed."
+                    cmd_xelatex = ["xelatex", "-shell-escape", "-interaction=batchmode", tex_path]
+                    result = subprocess.run(cmd_xelatex, cwd=temp_dir, capture_output=True, text=True, timeout=120)
+                    pdf_file = os.path.join(temp_dir, "py_file.pdf")
+                    if os.path.exists(pdf_file):
+                        os.rename(pdf_file, output_path)
+                        conversion_success = True
                     else:
-                        error_message = "IPYNB to LaTeX conversion failed."
+                        conversion_success = False
+                        error_message = result.stderr or "LaTeX compilation failed."
 
                 # --- DOC/DOCX/ODT Conversion ---
                 elif file_extension in [".doc", ".docx", ".odt"]:
