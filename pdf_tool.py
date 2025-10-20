@@ -461,7 +461,9 @@ elif action == "Convert to PDF":
                 elif file_extension == ".py":
                     py_content = uploaded_file.getvalue().decode("utf-8")
                     # Escape underscores and special LaTeX chars in filename
-                    escaped_name = original_name.replace("_", r"\_").replace("&", r"\&").replace("%", r"\%")
+                    import re
+                    # Escape LaTeX special characters, keep dash
+                    escaped_name = re.sub(r'([#%&$^_{}~\\])', r'\\\1', original_name)
                     
                     latex_template = fr"""
 \documentclass[12pt,a4paper]{{article}}
