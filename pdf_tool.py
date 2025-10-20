@@ -461,7 +461,7 @@ elif action == "Convert to PDF":
                 elif file_extension == ".py":
                     py_content = uploaded_file.getvalue().decode("utf-8")
 
-                    # Escape LaTeX special chars in filename, but keep dash '-' intact
+                    # Escape only LaTeX special characters except dash '-'
                     def escape_latex_title(filename: str) -> str:
                         specials = ['&', '%', '$', '#', '_', '{', '}', '~', '^', '\\']
                         for s in specials:
@@ -486,9 +486,9 @@ elif action == "Convert to PDF":
 
                 \begin{{document}}
 
-                % Filename as first page heading
+                % Filename as first page heading (verbatim, preserves dash)
                 \begin{{center}}
-                    \Large \textbf{{{title_safe}}}
+                    \Large \textbf{{\texttt{{{title_safe}}}}}
                 \end{{center}}
                 \vspace{{0.5cm}}
 
