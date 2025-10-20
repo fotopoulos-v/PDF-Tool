@@ -471,59 +471,59 @@ elif action == "Convert to PDF":
                     c.save()
                     conversion_success = True
 
-                    # --- PY Conversion (syntax highlighting only, no title, truly left-aligned) ---
-                    elif file_extension == ".py":
-                        import textwrap
-                        
-                        py_content = uploaded_file.getvalue().decode("utf-8")
-                        py_content = textwrap.dedent(py_content).strip()
-                        
-                        latex_template = fr"""
-                    \documentclass[12pt,a4paper]{{article}}
-                    \usepackage[margin=1in]{{geometry}}
-                    \usepackage{{minted}}
-                    \usepackage{{xcolor}}
-                    \usepackage{{fancyhdr}}
-                    \usepackage{{titlesec}}
+                # --- PY Conversion (syntax highlighting only, no title, truly left-aligned) ---
+                elif file_extension == ".py":
+                    import textwrap
+                    
+                    py_content = uploaded_file.getvalue().decode("utf-8")
+                    py_content = textwrap.dedent(py_content).strip()
+                    
+                    latex_template = fr"""
+                \documentclass[12pt,a4paper]{{article}}
+                \usepackage[margin=1in]{{geometry}}
+                \usepackage{{minted}}
+                \usepackage{{xcolor}}
+                \usepackage{{fancyhdr}}
+                \usepackage{{titlesec}}
 
-                    \pagestyle{{empty}} % no headers or footers
-                    \titlespacing*{{\section}}{{0pt}}{{0pt}}{{0pt}}
+                \pagestyle{{empty}} % no headers or footers
+                \titlespacing*{{\section}}{{0pt}}{{0pt}}{{0pt}}
 
-                    \setlength{{\parindent}}{{0pt}} % no paragraph indentation
-                    \setlength{{\parskip}}{{0pt}} % no extra spacing between paragraphs
+                \setlength{{\parindent}}{{0pt}} % no paragraph indentation
+                \setlength{{\parskip}}{{0pt}} % no extra spacing between paragraphs
 
-                    \begin{{document}}
-                    \begin{{flushleft}} % ensure absolute left alignment
+                \begin{{document}}
+                \begin{{flushleft}} % ensure absolute left alignment
 
-                    \begin{{minted}}[
-                        breaklines,
-                        breakanywhere,
-                        fontsize=\small,
-                        xleftmargin=0pt,
-                        framesep=0pt,
-                        baselinestretch=1.1
-                    ]{{python}}
-                    {py_content}
-                    \end{{minted}}
+                \begin{{minted}}[
+                    breaklines,
+                    breakanywhere,
+                    fontsize=\small,
+                    xleftmargin=0pt,
+                    framesep=0pt,
+                    baselinestretch=1.1
+                ]{{python}}
+                {py_content}
+                \end{{minted}}
 
-                    \end{{flushleft}}
-                    \end{{document}}
-                    """
+                \end{{flushleft}}
+                \end{{document}}
+                """
 
-                        tex_path = os.path.join(temp_dir, "py_file.tex")
-                        with open(tex_path, "w", encoding="utf-8") as f:
-                            f.write(latex_template)
-                        
-                        cmd_xelatex = ["xelatex", "-shell-escape", "-interaction=batchmode", tex_path]
-                        result = subprocess.run(cmd_xelatex, cwd=temp_dir, capture_output=True, text=True, timeout=120)
-                        
-                        pdf_file = os.path.join(temp_dir, "py_file.pdf")
-                        if os.path.exists(pdf_file):
-                            os.rename(pdf_file, output_path)
-                            conversion_success = True
-                        else:
-                            conversion_success = False
-                            error_message = result.stderr or "LaTeX compilation failed."
+                    tex_path = os.path.join(temp_dir, "py_file.tex")
+                    with open(tex_path, "w", encoding="utf-8") as f:
+                        f.write(latex_template)
+                    
+                    cmd_xelatex = ["xelatex", "-shell-escape", "-interaction=batchmode", tex_path]
+                    result = subprocess.run(cmd_xelatex, cwd=temp_dir, capture_output=True, text=True, timeout=120)
+                    
+                    pdf_file = os.path.join(temp_dir, "py_file.pdf")
+                    if os.path.exists(pdf_file):
+                        os.rename(pdf_file, output_path)
+                        conversion_success = True
+                    else:
+                        conversion_success = False
+                        error_message = result.stderr or "LaTeX compilation failed."
 
 
 
