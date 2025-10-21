@@ -1,18 +1,20 @@
 # 📄 PDF Tool App
 
-A **powerful all-in-one PDF Tool** built with [Streamlit](https://streamlit.io/).  
-Easily **compress**, **merge**, **split**, **rotate**, and **extract text or pages** from your PDF files — all through a clean, user-friendly web interface.  
+A **powerful PDF Tool** built with [Streamlit](https://streamlit.io/).  
+Easily **compress**, **extract text or pages** from your PDF files, **merge**, **split**, **rotate** PDF files, and **convert txt, py, ipynb** files to PDF  — all through a clean, user-friendly web interface.  
 
 ---
 
 ## 🚀 Features
 
-✅ **Compress PDFs** – Reduce file size without losing quality  
-✅ **Merge PDFs** – Combine multiple files into one  
-✅ **Split PDFs** – Extract selected pages or split into parts  
-✅ **Rotate PDFs** – Rotate pages clockwise or counter-clockwise  
-✅ **Extract Text** – Get plain text or text-only PDF versions  
-✅ **Extract Pages** – Save specific pages as a new PDF  
+- ✅ **Compress PDFs** – Reduce file size without losing quality  
+- ✅ **Extract Text** – Save PDF content as plain text or text-only PDF  
+- ✅ **Extract Pages** – Save selected pages as a new PDF  
+- ✅ **Merge PDFs** – Combine multiple PDFs into one  
+- ✅ **Split PDFs** – Split a PDF into individual pages, downloadable as a ZIP  
+- ✅ **Rotate PDFs** – Rotate pages clockwise or counter-clockwise  
+- ✅ **Convert txt, py, ipynb to PDF** – Convert supported files to PDF
+
 
 ---
 
