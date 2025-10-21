@@ -397,11 +397,11 @@ elif action == "Rotate":
 # --- Convert to PDF Section ---
 elif action == "Convert to PDF":
     st.header("Convert Files to PDF")
-    st.write("Convert text and document files (txt, docx, html, py, ipynb) into a PDF document.")
+    st.write("Convert supported files (txt, py, ipynb) into a PDF document.")
 
     uploaded_file = st.file_uploader(
         "Upload File", 
-        type=["txt", "doc", "docx", "odt", "ipynb", "py", "html", "zip"], 
+        type=["txt", "py", "ipynb"], 
         key="convert_file"
     )
 
@@ -429,7 +429,7 @@ elif action == "Convert to PDF":
                 conversion_success = False
                 error_message = ""
 
-                # --- TXT Conversion (fixed blank lines + proper wrapping) ---
+                # --- TXT Conversion ---
                 if file_extension == ".txt":
                     from reportlab.pdfgen import canvas
                     from reportlab.lib.pagesizes import letter
@@ -450,7 +450,6 @@ elif action == "Convert to PDF":
                     max_chars = int(usable_width / char_width)
 
                     for line in text.split("\n"):
-                        # Handle blank lines explicitly
                         if line.strip() == "":
                             y -= 12
                             if y < margin:
@@ -472,31 +471,28 @@ elif action == "Convert to PDF":
                     conversion_success = True
 
 
-
-
-                # --- PY Conversion (syntax highlighting only, no title, balanced top, reduced bottom) ---
+                # --- PY Conversion ---
                 elif file_extension == ".py":
                     import textwrap
                     py_content = uploaded_file.getvalue().decode("utf-8")
                     py_content = textwrap.dedent(py_content).strip()
 
-                    # Blank line at top to avoid clipping first line
-                    py_content = "\n" + py_content
+                    py_content = "\n" + py_content  # prevent clipping first line
 
                     latex_template = fr"""
                 \documentclass[12pt,a4paper]{{article}}
-                \usepackage[top=0.6in,bottom=0.5in,left=0.68in,right=0.68in]{{geometry}}  % balanced layout
+                \usepackage[top=0.6in,bottom=0.5in,left=0.68in,right=0.68in]{{geometry}}
                 \usepackage{{minted}}
                 \usepackage{{xcolor}}
                 \usepackage{{fvextra}}
                 \pagestyle{{empty}}
                 \setlength{{\parindent}}{{0pt}}
                 \setlength{{\parskip}}{{0pt}}
-                \setlength{{\footskip}}{{5pt}}  % minimal footer space
-                \setlength{{\textheight}}{{730pt}}  % extend text area to near bottom
+                \setlength{{\footskip}}{{5pt}}
+                \setlength{{\textheight}}{{730pt}}
 
                 \begin{{document}}
-                \vspace*{{-0.8cm}}  % small breathing space at top
+                \vspace*{{-0.8cm}}
                 \begin{{minted}}[
                     breaklines,
                     breakanywhere,
@@ -532,87 +528,8 @@ elif action == "Convert to PDF":
                         error_message = result.stderr or "LaTeX compilation failed."
 
 
-
-                # --- DOC/DOCX/ODT Conversion ---
-                elif file_extension in [".doc", ".docx", ".odt"]:
-                    html_path = os.path.join(temp_dir, "temp.html")
-                    cmd_pandoc = ["pandoc", input_path, "-o", html_path, "--standalone"]
-                    result_html = subprocess.run(cmd_pandoc, capture_output=True, text=True, timeout=60)
-                    if result_html.returncode == 0:
-                        cmd_pdf = ["wkhtmltopdf", "--quiet", html_path, output_path]
-                        result_pdf = subprocess.run(cmd_pdf, capture_output=True, text=True, timeout=60)
-                        if result_pdf.returncode == 0 and os.path.exists(output_path):
-                            conversion_success = True
-                        else:
-                            conversion_success = False
-                            error_message = "DOCX -> PDF conversion failed."
-                    else:
-                        conversion_success = False
-                        error_message = "Pandoc conversion to HTML failed."
-
-
-
-              # --- HTML Conversion (supports .html or .zip with assets) ---
-                elif file_extension in [".html", ".zip"]:
-                    st.info("You can upload a standalone HTML file **or** a `.zip` containing your HTML, CSS, JS, and image files.")
-
-                    # Prepare working directory
-                    with tempfile.TemporaryDirectory() as temp_dir:
-                        input_path = os.path.join(temp_dir, uploaded_file.name)
-                        with open(input_path, "wb") as f:
-                            f.write(uploaded_file.getbuffer())
-
-                        html_input_path = None
-
-                        if file_extension == ".zip":
-                            import zipfile
-                            # Extract all files from zip
-                            with zipfile.ZipFile(input_path, "r") as zip_ref:
-                                zip_ref.extractall(temp_dir)
-
-                            # Try to find index.html or any .html file
-                            possible_htmls = []
-                            for root, _, files in os.walk(temp_dir):
-                                for file in files:
-                                    if file.lower().endswith(".html"):
-                                        possible_htmls.append(os.path.join(root, file))
-
-                            if not possible_htmls:
-                                conversion_success = False
-                                error_message = "No HTML file found inside the ZIP."
-                            else:
-                                # Prefer index.html if available
-                                html_input_path = next((p for p in possible_htmls if "index.html" in p.lower()), possible_htmls[0])
-
-                        else:
-                            html_input_path = input_path
-
-                        # Proceed only if we have a valid HTML file
-                        if html_input_path:
-                            # Convert HTML to PDF using wkhtmltopdf
-                            cmd_pdf = [
-                                "wkhtmltopdf",
-                                "--quiet",
-                                "--enable-local-file-access",  # allow images/css/js in same folder
-                                html_input_path,
-                                output_path
-                            ]
-                            result_pdf = subprocess.run(cmd_pdf, capture_output=True, text=True, timeout=120)
-
-                            if result_pdf.returncode == 0 and os.path.exists(output_path):
-                                conversion_success = True
-                            else:
-                                conversion_success = False
-                                error_message = (
-                                    f"HTML → PDF conversion failed. stdout: {result_pdf.stdout or ''} stderr: {result_pdf.stderr or ''}"
-                                )
-
-
-
-                # --- ipynb Conversion ---
+                # --- IPYNB Conversion ---
                 elif file_extension == ".ipynb":
-                    
-                    # 1. Use nbconvert to convert ipynb to LaTeX
                     latex_output_name = "notebook_output.tex"
                     latex_output_path = os.path.join(temp_dir, latex_output_name)
                     
@@ -620,62 +537,38 @@ elif action == "Convert to PDF":
                         import json
                         with open(input_path, "r", encoding="utf-8") as f:
                             notebook_json = json.load(f)
-
-                        # Set title metadata to the original filename
                         notebook_json.setdefault("metadata", {})["title"] = original_name
-
                         with open(input_path, "w", encoding="utf-8") as f:
                             json.dump(notebook_json, f)
 
-                        # Command for LaTeX generation (using the system default template)
                         cmd_nbconvert = [
                             "jupyter-nbconvert", "--to", "latex", 
                             input_path, 
-                            "--output", latex_output_name, 
-                            # FIX: Removed the "--template" argument to rely on internal default
+                            "--output", latex_output_name,
                             "--output-dir", temp_dir 
                         ]
                         
-                        st.info("Attempting conversion using the high-quality **LaTeX pipeline** (nbconvert -> LaTeX -> PDF)...")
-                        
-                        # Run nbconvert to IPYNB -> LaTeX.
                         result_nbconvert = subprocess.run(cmd_nbconvert, capture_output=True, text=True, timeout=120)
                         
                         if result_nbconvert.returncode == 0 and os.path.exists(latex_output_path):
-                            
-                            # 2. Compile the LaTeX file to PDF using xelatex
                             xelatex_cmd = ["xelatex", "--interaction=batchmode", latex_output_name]
+                            subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120)
+                            result_xelatex = subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120)
                             
-                            st.info("Compiling LaTeX to PDF...")
-                            
-                            # First run (for auxiliary files, TOC, etc.)
-                            subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120) 
-                            # Second run (to resolve references/TOC)
-                            result_xelatex = subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120) 
-                            
-                            final_pdf_name = Path(latex_output_name).stem + ".pdf" 
-                            final_pdf_path_temp = os.path.join(temp_dir, final_pdf_name)
-                            
-                            if os.path.exists(final_pdf_path_temp):
-                                # Rename output file to 'output.pdf' 
-                                os.rename(final_pdf_path_temp, output_path)
+                            final_pdf_path = os.path.join(temp_dir, "notebook_output.pdf")
+                            if os.path.exists(final_pdf_path):
+                                os.rename(final_pdf_path, output_path)
                                 conversion_success = True
                             else:
                                 conversion_success = False
-                                # Provides detailed error about LaTeX compilation failure
                                 error_message = (
-                                    f"LaTeX compilation failed. Ensure the notebook content is valid for TeX and that all "
-                                    f"LaTeX dependencies are installed (xelatex, texlive packages). "
-                                    f"Error Details: {result_xelatex.stderr or result_xelatex.stdout}"
+                                    f"LaTeX compilation failed. Ensure dependencies are installed. "
+                                    f"Details: {result_xelatex.stderr or result_xelatex.stdout}"
                                 )
                         else:
-                            error_message = f"Jupyter Notebook conversion to LaTeX failed: {result_nbconvert.stderr}"
-                            
-                    except ImportError:
-                         error_message = "Python package 'nbconvert' not found. Please install it."
+                            error_message = f"nbconvert to LaTeX failed: {result_nbconvert.stderr}"
                     except Exception as e:
                         error_message = f"Notebook conversion error: {e}"
-
 
                 # --- Final Result ---
                 status_container.empty()
@@ -696,4 +589,3 @@ elif action == "Convert to PDF":
             except Exception as e:
                 status_container.empty()
                 st.error(f"❌ Critical Error: {e}")
-
