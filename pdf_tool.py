@@ -401,7 +401,7 @@ elif action == "Convert to PDF":
 
     uploaded_file = st.file_uploader(
         "Upload File", 
-        type=["txt", "doc", "docx", "odt", "ipynb", "py", "html"], 
+        type=["txt", "doc", "docx", "odt", "ipynb", "py", "html", "zip"], 
         key="convert_file"
     )
 
