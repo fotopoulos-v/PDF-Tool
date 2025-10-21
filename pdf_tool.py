@@ -576,6 +576,11 @@ baselinestretch=1.05
                             file_name=f"{original_name}.pdf",
                             mime="application/pdf"
                         )
+                        # Smaller reminder message
+                    st.markdown(
+                        '<p style="font-size:0.85em; color:#555;">⚠️ Always check the output PDF</p>',
+                        unsafe_allow_html=True
+                    )
                 else:
                     st.error(f"❌ Conversion failed: {error_message}")
 
