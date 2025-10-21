@@ -547,38 +547,60 @@ elif action == "Convert to PDF":
                         conversion_success = False
                         error_message = "Pandoc conversion to HTML failed."
 
-                # --- HTML Conversion ---
-                elif file_extension == ".html":
-                    import shutil
+                # --- HTML Conversion (supports standalone HTML or ZIP with assets) ---
+                elif file_extension in [".html", ".zip"]:
+                    import zipfile
 
-                    wkhtml_path = shutil.which("wkhtmltopdf")
-                    if not wkhtml_path:
-                        st.error("❌ wkhtmltopdf not found. Make sure it's installed and listed in packages.txt.")
-                        conversion_success = False
+                    # If ZIP, extract it and locate main HTML file
+                    if file_extension == ".zip":
+                        zip_path = os.path.join(temp_dir, uploaded_file.name)
+                        with open(zip_path, "wb") as f:
+                            f.write(uploaded_file.getbuffer())
+
+                        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                            zip_ref.extractall(temp_dir)
+
+                        # Try to find an index.html or any .html file
+                        html_files = []
+                        for root, dirs, files in os.walk(temp_dir):
+                            for file in files:
+                                if file.lower().endswith(".html"):
+                                    html_files.append(os.path.join(root, file))
+                        if not html_files:
+                            conversion_success = False
+                            error_message = "No HTML file found in ZIP."
+                        else:
+                            input_path = html_files[0]  # prioritize index.html if exists
                     else:
+                        # Regular HTML upload
+                        input_path = os.path.join(temp_dir, uploaded_file.name)
+                        with open(input_path, "wb") as f:
+                            f.write(uploaded_file.getbuffer())
+
+                    if os.path.exists(input_path):
+                        # Use wkhtmltopdf with local file access enabled
                         cmd_pdf = [
-                            wkhtml_path,
-                            "--margin-top", "10mm",
-                            "--margin-bottom", "10mm",
-                            "--margin-left", "10mm",
-                            "--margin-right", "10mm",
+                            "wkhtmltopdf",
                             "--quiet",
+                            "--enable-local-file-access",  # allow CSS/JS/images in same folder
                             input_path,
                             output_path
                         ]
-                        try:
-                            result_pdf = subprocess.run(cmd_pdf, capture_output=True, text=True, timeout=60)
-                            if result_pdf.returncode == 0 and os.path.exists(output_path):
-                                conversion_success = True
-                            else:
-                                conversion_success = False
-                                error_message = (
-                                    "HTML → PDF conversion failed.\n"
-                                    f"stdout: {result_pdf.stdout}\nstderr: {result_pdf.stderr}"
-                                )
-                        except Exception as e:
+
+                        result_pdf = subprocess.run(cmd_pdf, capture_output=True, text=True, timeout=60)
+
+                        if result_pdf.returncode == 0 and os.path.exists(output_path):
+                            conversion_success = True
+                        else:
                             conversion_success = False
-                            error_message = f"HTML → PDF conversion exception: {e}"
+                            error_message = (
+                                f"HTML → PDF conversion failed.\n"
+                                f"stdout: {result_pdf.stdout}\n"
+                                f"stderr: {result_pdf.stderr}"
+                            )
+                    else:
+                        conversion_success = False
+                        error_message = "Could not locate HTML file for conversion."
 
 
                 # --- ipynb Conversion ---
