@@ -402,8 +402,8 @@ elif action == "Convert to PDF":
     st.markdown("""
     Convert only the following file types to PDF:  
     <span style="background-color:#ffd700; color:black; padding:2px 6px; border-radius:3px; font-weight:bold;">TXT</span>
-    <span style="background-color:#1e90ff; color:white; padding:2px 6px; border-radius:3px; font-weight:bold;">PY</span>
-    <span style="background-color:#32cd32; color:white; padding:2px 6px; border-radius:3px; font-weight:bold;">IPYNB</span>
+    <span style="background-color:#0619A1; color:white; padding:2px 6px; border-radius:3px; font-weight:bold;">PY</span>
+    <span style="background-color:#2C024F; color:white; padding:2px 6px; border-radius:3px; font-weight:bold;">IPYNB</span>
     """, unsafe_allow_html=True)
     
     uploaded_file = st.file_uploader(
