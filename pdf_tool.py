@@ -397,11 +397,18 @@ elif action == "Rotate":
 # --- Convert to PDF Section ---
 elif action == "Convert to PDF":
     st.header("Convert Files to PDF")
-    st.write("Convert supported files (txt, py, ipynb) into a PDF document.")
-
+    
+    # Inline badges for supported types
+    st.markdown("""
+    Convert only the following file types to PDF:  
+    <span style="background-color:#ffd700; color:black; padding:2px 6px; border-radius:3px; font-weight:bold;">TXT</span>
+    <span style="background-color:#1e90ff; color:white; padding:2px 6px; border-radius:3px; font-weight:bold;">PY</span>
+    <span style="background-color:#32cd32; color:white; padding:2px 6px; border-radius:3px; font-weight:bold;">IPYNB</span>
+    """, unsafe_allow_html=True)
+    
     uploaded_file = st.file_uploader(
         "Upload File", 
-        type=["txt", "py", "ipynb"], 
+        type=["txt", "py", "ipynb"],  # only supported types
         key="convert_file"
     )
 
@@ -425,10 +432,10 @@ elif action == "Convert to PDF":
                 </div>
             """, unsafe_allow_html=True)
             
-            try:
-                conversion_success = False
-                error_message = ""
+            conversion_success = False
+            error_message = ""
 
+            try:
                 # --- TXT Conversion ---
                 if file_extension == ".txt":
                     from reportlab.pdfgen import canvas
@@ -466,59 +473,54 @@ elif action == "Convert to PDF":
                                 c.showPage()
                                 y = height - margin
                                 c.setFont("Courier", 10)
-
                     c.save()
                     conversion_success = True
-
 
                 # --- PY Conversion ---
                 elif file_extension == ".py":
                     import textwrap
                     py_content = uploaded_file.getvalue().decode("utf-8")
                     py_content = textwrap.dedent(py_content).strip()
-
-                    py_content = "\n" + py_content  # prevent clipping first line
+                    py_content = "\n" + py_content  # blank line at top
 
                     latex_template = fr"""
-                \documentclass[12pt,a4paper]{{article}}
-                \usepackage[top=0.6in,bottom=0.5in,left=0.68in,right=0.68in]{{geometry}}
-                \usepackage{{minted}}
-                \usepackage{{xcolor}}
-                \usepackage{{fvextra}}
-                \pagestyle{{empty}}
-                \setlength{{\parindent}}{{0pt}}
-                \setlength{{\parskip}}{{0pt}}
-                \setlength{{\footskip}}{{5pt}}
-                \setlength{{\textheight}}{{730pt}}
+\documentclass[12pt,a4paper]{{article}}
+\usepackage[top=0.6in,bottom=0.5in,left=0.68in,right=0.68in]{{geometry}}
+\usepackage{{minted}}
+\usepackage{{xcolor}}
+\usepackage{{fvextra}}
+\pagestyle{{empty}}
+\setlength{{\parindent}}{{0pt}}
+\setlength{{\parskip}}{{0pt}}
+\setlength{{\footskip}}{{5pt}}
+\setlength{{\textheight}}{{730pt}}
 
-                \begin{{document}}
-                \vspace*{{-0.8cm}}
-                \begin{{minted}}[
-                    breaklines,
-                    breakanywhere,
-                    fontsize=\small,
-                    framesep=0pt,
-                    xleftmargin=0pt,
-                    xrightmargin=0pt,
-                    resetmargins=true,
-                    gobble=0,
-                    rulecolor=,
-                    framerule=0pt,
-                    baselinestretch=1.05
-                ]{{python}}
-                {py_content}
-                \end{{minted}}
-                \vspace*{{-0.2cm}}
-                \end{{document}}
-                """
-
+\begin{{document}}
+\vspace*{{-0.8cm}}
+\begin{{minted}}[
+breaklines,
+breakanywhere,
+fontsize=\small,
+framesep=0pt,
+xleftmargin=0pt,
+xrightmargin=0pt,
+resetmargins=true,
+gobble=0,
+rulecolor=,
+framerule=0pt,
+baselinestretch=1.05
+]{{python}}
+{py_content}
+\end{{minted}}
+\vspace*{{-0.2cm}}
+\end{{document}}
+"""
                     tex_path = os.path.join(temp_dir, "py_file.tex")
                     with open(tex_path, "w", encoding="utf-8") as f:
                         f.write(latex_template)
 
                     cmd_xelatex = ["xelatex", "-shell-escape", "-interaction=batchmode", tex_path]
                     result = subprocess.run(cmd_xelatex, cwd=temp_dir, capture_output=True, text=True, timeout=120)
-
                     pdf_file = os.path.join(temp_dir, "py_file.pdf")
                     if os.path.exists(pdf_file):
                         os.rename(pdf_file, output_path)
@@ -527,50 +529,41 @@ elif action == "Convert to PDF":
                         conversion_success = False
                         error_message = result.stderr or "LaTeX compilation failed."
 
-
                 # --- IPYNB Conversion ---
                 elif file_extension == ".ipynb":
-                    latex_output_name = "notebook_output.tex"
-                    latex_output_path = os.path.join(temp_dir, latex_output_name)
-                    
+                    import json
                     try:
-                        import json
                         with open(input_path, "r", encoding="utf-8") as f:
                             notebook_json = json.load(f)
                         notebook_json.setdefault("metadata", {})["title"] = original_name
                         with open(input_path, "w", encoding="utf-8") as f:
                             json.dump(notebook_json, f)
-
                         cmd_nbconvert = [
-                            "jupyter-nbconvert", "--to", "latex", 
-                            input_path, 
-                            "--output", latex_output_name,
-                            "--output-dir", temp_dir 
+                            "jupyter-nbconvert", "--to", "latex",
+                            input_path,
+                            "--output", "notebook_output.tex",
+                            "--output-dir", temp_dir
                         ]
-                        
                         result_nbconvert = subprocess.run(cmd_nbconvert, capture_output=True, text=True, timeout=120)
-                        
+                        latex_output_path = os.path.join(temp_dir, "notebook_output.tex")
                         if result_nbconvert.returncode == 0 and os.path.exists(latex_output_path):
-                            xelatex_cmd = ["xelatex", "--interaction=batchmode", latex_output_name]
+                            xelatex_cmd = ["xelatex", "--interaction=batchmode", "notebook_output.tex"]
                             subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120)
-                            result_xelatex = subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120)
-                            
+                            subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120)
                             final_pdf_path = os.path.join(temp_dir, "notebook_output.pdf")
                             if os.path.exists(final_pdf_path):
                                 os.rename(final_pdf_path, output_path)
                                 conversion_success = True
                             else:
                                 conversion_success = False
-                                error_message = (
-                                    f"LaTeX compilation failed. Ensure dependencies are installed. "
-                                    f"Details: {result_xelatex.stderr or result_xelatex.stdout}"
-                                )
+                                error_message = "LaTeX compilation failed for notebook."
                         else:
-                            error_message = f"nbconvert to LaTeX failed: {result_nbconvert.stderr}"
+                            conversion_success = False
+                            error_message = f"Notebook -> LaTeX failed: {result_nbconvert.stderr}"
                     except Exception as e:
+                        conversion_success = False
                         error_message = f"Notebook conversion error: {e}"
 
-                # --- Final Result ---
                 status_container.empty()
                 if conversion_success and os.path.exists(output_path):
                     st.success(f"✅ {file_extension[1:].upper()} converted to PDF successfully!")
