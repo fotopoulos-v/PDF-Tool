@@ -471,6 +471,9 @@ elif action == "Convert to PDF":
                     c.save()
                     conversion_success = True
 
+
+
+
                 # --- PY Conversion (syntax highlighting only, no title, balanced top, reduced bottom) ---
                 elif file_extension == ".py":
                     import textwrap
@@ -547,60 +550,63 @@ elif action == "Convert to PDF":
                         conversion_success = False
                         error_message = "Pandoc conversion to HTML failed."
 
-                # --- HTML Conversion (supports standalone HTML or ZIP with assets) ---
+
+
+              # --- HTML Conversion (supports .html or .zip with assets) ---
                 elif file_extension in [".html", ".zip"]:
-                    import zipfile
+                    st.info("You can upload a standalone HTML file **or** a `.zip` containing your HTML, CSS, JS, and image files.")
 
-                    # If ZIP, extract it and locate main HTML file
-                    if file_extension == ".zip":
-                        zip_path = os.path.join(temp_dir, uploaded_file.name)
-                        with open(zip_path, "wb") as f:
-                            f.write(uploaded_file.getbuffer())
-
-                        with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                            zip_ref.extractall(temp_dir)
-
-                        # Try to find an index.html or any .html file
-                        html_files = []
-                        for root, dirs, files in os.walk(temp_dir):
-                            for file in files:
-                                if file.lower().endswith(".html"):
-                                    html_files.append(os.path.join(root, file))
-                        if not html_files:
-                            conversion_success = False
-                            error_message = "No HTML file found in ZIP."
-                        else:
-                            input_path = html_files[0]  # prioritize index.html if exists
-                    else:
-                        # Regular HTML upload
+                    # Prepare working directory
+                    with tempfile.TemporaryDirectory() as temp_dir:
                         input_path = os.path.join(temp_dir, uploaded_file.name)
                         with open(input_path, "wb") as f:
                             f.write(uploaded_file.getbuffer())
 
-                    if os.path.exists(input_path):
-                        # Use wkhtmltopdf with local file access enabled
-                        cmd_pdf = [
-                            "wkhtmltopdf",
-                            "--quiet",
-                            "--enable-local-file-access",  # allow CSS/JS/images in same folder
-                            input_path,
-                            output_path
-                        ]
+                        html_input_path = None
 
-                        result_pdf = subprocess.run(cmd_pdf, capture_output=True, text=True, timeout=60)
+                        if file_extension == ".zip":
+                            import zipfile
+                            # Extract all files from zip
+                            with zipfile.ZipFile(input_path, "r") as zip_ref:
+                                zip_ref.extractall(temp_dir)
 
-                        if result_pdf.returncode == 0 and os.path.exists(output_path):
-                            conversion_success = True
+                            # Try to find index.html or any .html file
+                            possible_htmls = []
+                            for root, _, files in os.walk(temp_dir):
+                                for file in files:
+                                    if file.lower().endswith(".html"):
+                                        possible_htmls.append(os.path.join(root, file))
+
+                            if not possible_htmls:
+                                conversion_success = False
+                                error_message = "No HTML file found inside the ZIP."
+                            else:
+                                # Prefer index.html if available
+                                html_input_path = next((p for p in possible_htmls if "index.html" in p.lower()), possible_htmls[0])
+
                         else:
-                            conversion_success = False
-                            error_message = (
-                                f"HTML → PDF conversion failed.\n"
-                                f"stdout: {result_pdf.stdout}\n"
-                                f"stderr: {result_pdf.stderr}"
-                            )
-                    else:
-                        conversion_success = False
-                        error_message = "Could not locate HTML file for conversion."
+                            html_input_path = input_path
+
+                        # Proceed only if we have a valid HTML file
+                        if html_input_path:
+                            # Convert HTML to PDF using wkhtmltopdf
+                            cmd_pdf = [
+                                "wkhtmltopdf",
+                                "--quiet",
+                                "--enable-local-file-access",  # allow images/css/js in same folder
+                                html_input_path,
+                                output_path
+                            ]
+                            result_pdf = subprocess.run(cmd_pdf, capture_output=True, text=True, timeout=120)
+
+                            if result_pdf.returncode == 0 and os.path.exists(output_path):
+                                conversion_success = True
+                            else:
+                                conversion_success = False
+                                error_message = (
+                                    f"HTML → PDF conversion failed. stdout: {result_pdf.stdout or ''} stderr: {result_pdf.stderr or ''}"
+                                )
+
 
 
                 # --- ipynb Conversion ---
