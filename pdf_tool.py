@@ -9,7 +9,12 @@ import fitz  # PyMuPDF
 import json
 import io
 
-st.set_page_config(page_title="PDF Tool", layout="wide")
+# st.set_page_config(page_title="PDF Tool", layout="wide")
+st.set_page_config(
+    page_title="PDF Tool",
+    page_icon="assets/images/pdf-tool.png",  
+    layout="centered"
+)
 st.markdown("""
     <div style="display: flex; align-items: center; gap: 10px;">
         <img src="https://i.imgur.com/Sz8WC8L.png" width="40">
