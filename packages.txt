@@ -4,3 +4,4 @@ wkhtmltopdf
 texlive-xetex
 texlive-fonts-extra
 texlive-latex-extra
+inkscape
