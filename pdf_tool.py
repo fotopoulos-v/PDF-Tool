@@ -5,7 +5,6 @@ import tempfile
 from pathlib import Path
 from PyPDF2 import PdfReader, PdfWriter
 import fitz  # PyMuPDF
-# Import for new feature
 import json
 import io
 
@@ -412,7 +411,7 @@ elif action == "Convert to PDF":
     
     uploaded_file = st.file_uploader(
         "Upload File", 
-        type=["txt", "py", "ipynb"],  # only supported types
+        type=["txt", "py", "ipynb"],
         key="convert_file"
     )
 
@@ -533,27 +532,64 @@ baselinestretch=1.05
                         conversion_success = False
                         error_message = result.stderr or "LaTeX compilation failed."
 
-                # --- IPYNB Conversion ---
+                # --- IPYNB Conversion with YAML/HTML sanitization ---
                 elif file_extension == ".ipynb":
-                    import json
                     try:
+                        # Load and sanitize the notebook
                         with open(input_path, "r", encoding="utf-8") as f:
                             notebook_json = json.load(f)
+                        
+                        # Set title metadata
                         notebook_json.setdefault("metadata", {})["title"] = original_name
+                        
+                        # Sanitize markdown cells to remove YAML blocks and problematic HTML
+                        for cell in notebook_json.get("cells", []):
+                            if cell.get("cell_type") == "markdown":
+                                source = cell.get("source", [])
+                                if isinstance(source, list):
+                                    sanitized_source = []
+                                    skip_yaml = False
+                                    
+                                    for line in source:
+                                        # Detect YAML front matter blocks
+                                        if line.strip() == "---":
+                                            skip_yaml = not skip_yaml
+                                            continue
+                                        
+                                        if skip_yaml:
+                                            continue
+                                        
+                                        # Remove problematic HTML/CSS that causes pandoc issues
+                                        if "<style>" in line or "</style>" in line:
+                                            continue
+                                        if line.strip().startswith("<IPython.core.display"):
+                                            continue
+                                            
+                                        sanitized_source.append(line)
+                                    
+                                    cell["source"] = sanitized_source
+                        
+                        # Save sanitized notebook
                         with open(input_path, "w", encoding="utf-8") as f:
                             json.dump(notebook_json, f)
+                        
+                        # Convert to LaTeX
                         cmd_nbconvert = [
                             "jupyter-nbconvert", "--to", "latex",
                             input_path,
                             "--output", "notebook_output.tex",
-                            "--output-dir", temp_dir
+                            "--output-dir", temp_dir,
+                            "--no-prompt"  # Remove input/output prompts if desired
                         ]
                         result_nbconvert = subprocess.run(cmd_nbconvert, capture_output=True, text=True, timeout=120)
+                        
                         latex_output_path = os.path.join(temp_dir, "notebook_output.tex")
                         if result_nbconvert.returncode == 0 and os.path.exists(latex_output_path):
+                            # Compile LaTeX to PDF (run twice for proper rendering)
                             xelatex_cmd = ["xelatex", "--interaction=batchmode", "notebook_output.tex"]
                             subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120)
                             subprocess.run(xelatex_cmd, cwd=temp_dir, capture_output=True, text=True, timeout=120)
+                            
                             final_pdf_path = os.path.join(temp_dir, "notebook_output.pdf")
                             if os.path.exists(final_pdf_path):
                                 os.rename(final_pdf_path, output_path)
@@ -563,7 +599,7 @@ baselinestretch=1.05
                                 error_message = "LaTeX compilation failed for notebook."
                         else:
                             conversion_success = False
-                            error_message = f"Notebook -> LaTeX failed: {result_nbconvert.stderr}"
+                            error_message = f"Notebook → LaTeX failed: {result_nbconvert.stderr}"
                     except Exception as e:
                         conversion_success = False
                         error_message = f"Notebook conversion error: {e}"
@@ -580,7 +616,7 @@ baselinestretch=1.05
                             file_name=f"{original_name}.pdf",
                             mime="application/pdf"
                         )
-                        # Smaller reminder message
+                    # Smaller reminder message
                     st.markdown(
                         '<p style="font-size:0.85em; color:#555;">⚠️ Always check the output PDF</p>',
                         unsafe_allow_html=True
