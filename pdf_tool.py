@@ -532,44 +532,37 @@ baselinestretch=1.05
                         conversion_success = False
                         error_message = result.stderr or "LaTeX compilation failed."
 
-                # --- IPYNB Conversion with YAML/HTML sanitization ---
+                # --- IPYNB Conversion - Escape YAML markers instead of removing them ---
                 elif file_extension == ".ipynb":
                     try:
-                        # Load and sanitize the notebook
+                        # Load the notebook
                         with open(input_path, "r", encoding="utf-8") as f:
                             notebook_json = json.load(f)
                         
                         # Set title metadata
                         notebook_json.setdefault("metadata", {})["title"] = original_name
                         
-                        # Sanitize markdown cells to remove YAML blocks and problematic HTML
+                        # Fix markdown cells to prevent YAML parsing issues
                         for cell in notebook_json.get("cells", []):
                             if cell.get("cell_type") == "markdown":
                                 source = cell.get("source", [])
                                 if isinstance(source, list):
-                                    sanitized_source = []
-                                    skip_yaml = False
+                                    fixed_source = []
                                     
-                                    for line in source:
-                                        # Detect YAML front matter blocks
+                                    for i, line in enumerate(source):
+                                        # If line is exactly "---\n" or "---", escape it by adding a space or converting to literal
+                                        # This prevents pandoc from treating it as YAML front matter
                                         if line.strip() == "---":
-                                            skip_yaml = not skip_yaml
-                                            continue
-                                        
-                                        if skip_yaml:
-                                            continue
-                                        
-                                        # Remove problematic HTML/CSS that causes pandoc issues
-                                        if "<style>" in line or "</style>" in line:
-                                            continue
-                                        if line.strip().startswith("<IPython.core.display"):
-                                            continue
-                                            
-                                        sanitized_source.append(line)
+                                            # Add a zero-width space or use HTML horizontal rule instead
+                                            # Option 1: Use HTML <hr> which renders as horizontal line
+                                            fixed_source.append("<hr>\n")
+                                            # Option 2 (alternative): Add backslash escape: fixed_source.append("\\---\n")
+                                        else:
+                                            fixed_source.append(line)
                                     
-                                    cell["source"] = sanitized_source
+                                    cell["source"] = fixed_source
                         
-                        # Save sanitized notebook
+                        # Save the fixed notebook
                         with open(input_path, "w", encoding="utf-8") as f:
                             json.dump(notebook_json, f)
                         
@@ -578,8 +571,7 @@ baselinestretch=1.05
                             "jupyter-nbconvert", "--to", "latex",
                             input_path,
                             "--output", "notebook_output.tex",
-                            "--output-dir", temp_dir,
-                            "--no-prompt"  # Remove input/output prompts if desired
+                            "--output-dir", temp_dir
                         ]
                         result_nbconvert = subprocess.run(cmd_nbconvert, capture_output=True, text=True, timeout=120)
                         
